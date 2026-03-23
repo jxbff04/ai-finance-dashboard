@@ -336,7 +336,6 @@ export default function Dashboard() {
     fetchData();
   }, [fetchData]);
 
-  // Fungsi hapus transaksi yang men-trigger Supabase dan refresh data
   const handleDeleteTransaction = async (id: string) => {
     if (!window.confirm('Hapus transaksi ini? Saldo Anda akan dikembalikan secara otomatis.')) return;
     try {
@@ -360,7 +359,6 @@ export default function Dashboard() {
 
   const totalNetWorth = accounts.reduce((sum, account) => sum + toNumber(account.balance), 0);
 
-  // Injeksi kepintaran AI agar tahu rincian setiap akun
   const accountContextRef = useRef('');
   const accountDetails = accounts.map(a => `- ${a.name} (${a.type}): ${formatCurrency(toNumber(a.balance))}`).join('\n');
   accountContextRef.current = [
@@ -457,10 +455,8 @@ export default function Dashboard() {
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return '—';
-
     const date = new Date(dateString);
     if (Number.isNaN(date.getTime())) return '—';
-
     return new Intl.DateTimeFormat('id-ID', {
       day: '2-digit',
       month: 'short',
@@ -471,17 +467,11 @@ export default function Dashboard() {
   useEffect(() => {
     if (!showAIAssistant) return;
     if (chatMessages.length > 0) return;
-
     setChatMessages([
       {
         id: 'welcome',
         role: 'assistant',
-        parts: [
-          {
-            type: 'text',
-            text: '✨ Halo! Saya Asisten Keuangan Anda. Ada yang bisa saya bantu hari ini?',
-          },
-        ],
+        parts: [{ type: 'text', text: '✨ Halo! Saya Asisten Keuangan Anda. Ada yang bisa saya bantu hari ini?' }],
       },
     ]);
   }, [showAIAssistant, chatMessages.length, setChatMessages]);
@@ -494,7 +484,6 @@ export default function Dashboard() {
             <Wallet className="h-12 w-12 text-emerald-400 mx-auto animate-pulse" />
           </div>
           <p className="text-xl font-semibold text-white mb-2">Loading...</p>
-          <p className="text-sm text-gray-400">Mengambil data keuangan Anda</p>
         </div>
       </div>
     );
@@ -503,32 +492,25 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-gray-100">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
               Personal Finance
             </h1>
-            <p className="mt-1 text-sm text-gray-400">
-              Ringkasan & transaksi mengikuti periode:{' '}
+            <p className="mt-1 text-xs sm:text-sm text-gray-400">
+              Periode:{' '}
               <span className="font-mono text-cyan-400/90">{selectedMonthLabel}</span>
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger
-                className="h-9 w-[min(100vw-2rem,240px)] border-gray-700 bg-[#1A1A1A] text-left text-sm text-gray-200 hover:bg-[#252525]"
-                aria-label="Pilih bulan laporan"
-              >
+              <SelectTrigger className="h-9 w-[160px] sm:w-[200px] border-gray-700 bg-[#1A1A1A] text-xs sm:text-sm text-gray-200">
                 <Calendar className="mr-2 h-4 w-4 shrink-0 text-cyan-500/90" />
                 <SelectValue placeholder="Bulan" />
               </SelectTrigger>
-              <SelectContent className="max-h-[min(320px,70vh)] border-gray-800 bg-[#141414] text-gray-100">
+              <SelectContent className="border-gray-800 bg-[#141414] text-gray-100">
                 {monthOptions.map((opt) => (
-                  <SelectItem
-                    key={opt.value}
-                    value={opt.value}
-                    className="focus:bg-white/10 focus:text-white"
-                  >
+                  <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>
                 ))}
@@ -538,44 +520,30 @@ export default function Dashboard() {
               type="button"
               variant="outline"
               size="sm"
-              className="border-gray-700 bg-[#1A1A1A] text-gray-200 hover:bg-[#252525] hover:text-white"
-              onClick={() =>
-                downloadTransactionsCsv(
-                  filteredTransactions,
-                  `${selectedMonth}_${txFilter.type}_${txFilter.accountId}`
-                )
-              }
+              className="h-9 border-gray-700 bg-[#1A1A1A] text-xs sm:text-sm text-gray-200"
+              onClick={() => downloadTransactionsCsv(filteredTransactions, `${selectedMonth}`)}
             >
-              <Download className="mr-2 h-4 w-4" />
-              Export CSV
+              <Download className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
+              Export
             </Button>
           </div>
         </header>
 
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <Card className="border-gray-800 bg-gradient-to-br from-[#1A1A1A] to-[#0F0F0F]">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <p className="text-xs sm:text-sm font-medium uppercase tracking-wider text-gray-500">
                     Total Net Worth
                   </p>
-                  <h2 className="mt-2 font-mono text-4xl font-bold tabular-nums tracking-tight text-white">
-                    {errorMessage ? (
-                      '—'
-                    ) : accounts.length > 0 ? (
-                      formatCurrency(totalNetWorth)
-                    ) : (
-                      'Belum ada data akun'
-                    )}
+                  <h2 className="mt-1 sm:mt-2 font-mono text-2xl sm:text-4xl font-bold tabular-nums tracking-tight text-white">
+                    {errorMessage ? '—' : accounts.length > 0 ? formatCurrency(totalNetWorth) : '0'}
                   </h2>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Total bersih akun (real-time) · tidak tergantung periode di header
-                  </p>
                 </div>
                 <div className="hidden sm:block">
-                  <div className="flex h-24 w-24 items-center justify-center rounded-full bg-emerald-400/10">
-                    <Wallet className="h-12 w-12 text-emerald-400" />
+                  <div className="flex h-16 w-16 sm:h-24 sm:w-24 items-center justify-center rounded-full bg-emerald-400/10">
+                    <Wallet className="h-8 w-8 sm:h-12 sm:w-12 text-emerald-400" />
                   </div>
                 </div>
               </div>
@@ -583,177 +551,77 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* PERBAIKAN GRID: Menjadi grid-cols-2 untuk mobile */}
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:gap-4 lg:grid-cols-4">
           <Card
             role="button"
-            tabIndex={0}
             onClick={() => setTxFilter({ type: 'income', accountId: 'all' })}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setTxFilter({ type: 'income', accountId: 'all' });
-              }
-            }}
-            className={cn(
-              'cursor-pointer border-gray-800 bg-[#1A1A1A] transition-all hover:border-emerald-500/35 hover:bg-[#1f1f1f]',
-              txFilter.type === 'income' && txFilter.accountId === 'all' &&
-                'border-emerald-500/50 ring-1 ring-emerald-500/30'
-            )}
+            className={cn('cursor-pointer border-gray-800 bg-[#1A1A1A] transition-all', txFilter.type === 'income' && txFilter.accountId === 'all' && 'border-emerald-500/50 ring-1 ring-emerald-500/30')}
           >
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-400/10">
-                  <TrendingUp className="h-5 w-5 text-emerald-400" />
-                </div>
+            <CardContent className="p-3 sm:p-5">
+              <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-emerald-400/10">
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400" />
               </div>
-              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-gray-500">
-                Pemasukan
-              </p>
-              <p className="mt-0.5 text-[11px] text-gray-600">{selectedMonthLabel}</p>
-              <p className="mt-1 font-mono text-xl font-bold tabular-nums text-white">
-                {formatCurrency(monthlyIncome)}
-              </p>
+              <p className="mt-3 sm:mt-4 text-[10px] sm:text-xs font-medium uppercase text-gray-500">Pemasukan</p>
+              <p className="mt-1 font-mono text-sm sm:text-xl font-bold text-white">{formatCurrency(monthlyIncome)}</p>
             </CardContent>
           </Card>
 
           <Card
             role="button"
-            tabIndex={0}
             onClick={() => setTxFilter({ type: 'expense', accountId: 'all' })}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setTxFilter({ type: 'expense', accountId: 'all' });
-              }
-            }}
-            className={cn(
-              'cursor-pointer border-gray-800 bg-[#1A1A1A] transition-all hover:border-red-500/35 hover:bg-[#1f1f1f]',
-              txFilter.type === 'expense' && txFilter.accountId === 'all' &&
-                'border-red-500/45 ring-1 ring-red-500/25'
-            )}
+            className={cn('cursor-pointer border-gray-800 bg-[#1A1A1A] transition-all', txFilter.type === 'expense' && txFilter.accountId === 'all' && 'border-red-500/45 ring-1 ring-red-500/25')}
           >
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/20 bg-red-400/10">
-                  <TrendingDown className="h-5 w-5 text-red-400" />
-                </div>
+            <CardContent className="p-3 sm:p-5">
+              <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-red-400/10">
+                <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-400" />
               </div>
-              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-gray-500">
-                Pengeluaran
-              </p>
-              <p className="mt-0.5 text-[11px] text-gray-600">{selectedMonthLabel}</p>
-              <p className="mt-1 font-mono text-xl font-bold tabular-nums text-white">
-                {formatCurrency(monthlyExpense)}
-              </p>
+              <p className="mt-3 sm:mt-4 text-[10px] sm:text-xs font-medium uppercase text-gray-500">Pengeluaran</p>
+              <p className="mt-1 font-mono text-sm sm:text-xl font-bold text-white">{formatCurrency(monthlyExpense)}</p>
             </CardContent>
           </Card>
 
           <Card
             role="button"
-            tabIndex={0}
             onClick={() => setTxFilter({ type: 'all', accountId: 'all' })}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setTxFilter({ type: 'all', accountId: 'all' });
-              }
-            }}
-            className={cn(
-              'cursor-pointer border-gray-800 bg-[#1A1A1A] transition-all hover:border-cyan-500/35 hover:bg-[#1f1f1f]',
-              !isFilterActive && 'border-cyan-500/30 ring-1 ring-cyan-500/20'
-            )}
+            className={cn('cursor-pointer border-gray-800 bg-[#1A1A1A] transition-all', !isFilterActive && 'border-cyan-500/30 ring-1 ring-cyan-500/20')}
           >
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-cyan-500/20 bg-blue-400/10">
-                  <Wallet className="h-5 w-5 text-cyan-400" />
-                </div>
+            <CardContent className="p-3 sm:p-5">
+              <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-blue-400/10">
+                <Wallet className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-400" />
               </div>
-              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-gray-500">Total Akun</p>
-              <p className="mt-1 font-mono text-xl font-bold tabular-nums text-white">{accounts.length} Akun</p>
+              <p className="mt-3 sm:mt-4 text-[10px] sm:text-xs font-medium uppercase text-gray-500">Total Akun</p>
+              <p className="mt-1 font-mono text-sm sm:text-xl font-bold text-white">{accounts.length} Akun</p>
             </CardContent>
           </Card>
 
           <Card className="border border-amber-500/15 bg-[#1A1A1A]">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-400/10">
-                  <TrendingUp className="h-5 w-5 text-amber-400" />
-                </div>
+            <CardContent className="p-3 sm:p-5">
+              <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-amber-400/10">
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-amber-400" />
               </div>
-              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-gray-500">
-                Saldo Bersih
-              </p>
-              <p className="mt-0.5 text-[11px] text-gray-600">{selectedMonthLabel}</p>
-              <p className="mt-1 font-mono text-xl font-bold tabular-nums text-white">
-                {formatCurrency(monthlyIncome - monthlyExpense)}
-              </p>
+              <p className="mt-3 sm:mt-4 text-[10px] sm:text-xs font-medium uppercase text-gray-500">Saldo Bersih</p>
+              <p className="mt-1 font-mono text-sm sm:text-xl font-bold text-white">{formatCurrency(monthlyIncome - monthlyExpense)}</p>
             </CardContent>
           </Card>
         </div>
 
-        <div className="mb-8">
-          <Card className="border border-orange-500/25 bg-[#0f0f0f] shadow-[inset_0_1px_0_0_rgba(251,146,60,0.12)]">
+        <div className="mb-6 sm:mb-8">
+          <Card className="border border-orange-500/25 bg-[#0f0f0f]">
             <CardHeader className="border-b border-white/[0.06] pb-3">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <CardTitle className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-400">
-                    Tren pengeluaran
-                  </CardTitle>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Enam bulan terakhir · kumulatif pengeluaran (expense)
-                  </p>
-                </div>
-                <span className="font-mono text-[11px] text-orange-400/80">IDR</span>
-              </div>
+              <CardTitle className="text-xs sm:text-sm font-semibold uppercase tracking-widest text-gray-400">
+                Tren Pengeluaran 6 Bulan
+              </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <div className="h-[280px] w-full min-w-0">
+              <div className="h-[200px] sm:h-[280px] w-full min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RechartsLineChart
-                    data={expenseChartLast6Months}
-                    margin={{ top: 12, right: 12, left: 4, bottom: 4 }}
-                  >
+                  <RechartsLineChart data={expenseChartLast6Months} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="4 4" stroke="#27272a" vertical={false} />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: '#a1a1aa', fontSize: 11 }}
-                      axisLine={{ stroke: '#3f3f46' }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: '#a1a1aa', fontSize: 11 }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v) => {
-                        const n = Number(v);
-                        if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}jt`;
-                        if (n >= 1_000) return `${Math.round(n / 1_000)}rb`;
-                        return String(n);
-                      }}
-                    />
-                    <Tooltip
-                      cursor={{ stroke: '#fb923c', strokeWidth: 1, strokeDasharray: '4 4' }}
-                      contentStyle={{
-                        backgroundColor: '#141414',
-                        border: '1px solid rgba(251, 146, 60, 0.35)',
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
-                      labelStyle={{ color: '#e5e5e5' }}
-                      formatter={(value) => {
-                        const n = typeof value === 'number' ? value : Number(value);
-                        return [formatCurrency(Number.isFinite(n) ? n : 0), 'Pengeluaran'];
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="pengeluaran"
-                      stroke="#fb923c"
-                      strokeWidth={3}
-                      dot={{ r: 4, fill: '#fb923c', stroke: '#0a0a0a', strokeWidth: 2 }}
-                      activeDot={{ r: 6, fill: '#fdba74', stroke: '#0a0a0a', strokeWidth: 2 }}
-                    />
+                    <XAxis dataKey="name" tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000)}k`} width={40} />
+                    <Tooltip contentStyle={{ backgroundColor: '#141414', border: '1px solid #fb923c', borderRadius: 8, fontSize: 12 }} />
+                    <Line type="monotone" dataKey="pengeluaran" stroke="#fb923c" strokeWidth={2} dot={{ r: 3, fill: '#fb923c' }} />
                   </RechartsLineChart>
                 </ResponsiveContainer>
               </div>
@@ -764,34 +632,14 @@ export default function Dashboard() {
         <div className="mb-8 grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <Card className="border-gray-800 bg-[#1A1A1A]">
-              <CardHeader className="border-b border-gray-800">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
-                    <div className="flex items-center gap-2">
-                      <Terminal className="h-4 w-4 text-cyan-500/80" aria-hidden />
-                      <CardTitle className="text-lg font-semibold tracking-tight text-white">
-                        Transaksi
-                      </CardTitle>
-                    </div>
-                    <span className="font-mono text-xs text-gray-500">{selectedMonthLabel}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isFilterActive && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs text-red-400/90 hover:bg-red-950/40 hover:text-red-300"
-                        onClick={() => setTxFilter({ type: 'all', accountId: 'all' })}
-                      >
-                        Reset filter
-                      </Button>
-                    )}
-                    <span className="hidden text-xs text-gray-500 sm:inline">
-                      <Filter className="mr-1 inline h-3.5 w-3.5" aria-hidden />
-                      Klik kartu ringkasan atau akun untuk menyaring
-                    </span>
-                  </div>
+              <CardHeader className="border-b border-gray-800 p-4 sm:p-6">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base sm:text-lg font-semibold text-white">Transaksi</CardTitle>
+                  {isFilterActive && (
+                    <Button variant="ghost" size="sm" className="h-7 text-[10px] sm:text-xs text-red-400" onClick={() => setTxFilter({ type: 'all', accountId: 'all' })}>
+                      Reset Filter
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -799,71 +647,31 @@ export default function Dashboard() {
                   {filteredTransactions.map((transaction) => {
                     const amount = toNumber(transaction.amount);
                     return (
-                      <div
-                        key={transaction.id}
-                        className="flex items-center justify-between p-4 transition-colors hover:bg-[#252525]"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                              transaction.type === 'income'
-                                ? 'bg-emerald-400/10'
-                                : transaction.type === 'expense'
-                                ? 'bg-red-400/10'
-                                : 'bg-blue-400/10'
-                            }`}
-                          >
-                            {transaction.type === 'income' ? (
-                              <TrendingUp className="h-5 w-5 text-emerald-400" />
-                            ) : transaction.type === 'expense' ? (
-                              <TrendingDown className="h-5 w-5 text-red-400" />
-                            ) : (
-                              <ArrowRightLeft className="h-5 w-5 text-blue-400" />
-                            )}
+                      <div key={transaction.id} className="flex items-center justify-between p-3 sm:p-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                          <div className={`flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg ${transaction.type === 'income' ? 'bg-emerald-400/10' : transaction.type === 'expense' ? 'bg-red-400/10' : 'bg-blue-400/10'}`}>
+                            {transaction.type === 'income' ? <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400" /> : transaction.type === 'expense' ? <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-400" /> : <ArrowRightLeft className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" />}
                           </div>
-                          <div>
-                            <p className="font-medium text-white">{transaction?.notes ?? ''}</p>
-                            <div className="mt-1 flex items-center gap-2">
-                              <Badge
-                                variant="outline"
-                                className="border-gray-700 bg-[#0F0F0F] text-xs text-gray-400"
-                              >
-                                {transaction?.category ?? ''}
-                              </Badge>
-                              <span className="text-xs text-gray-500">{transaction.accounts?.name}</span>
-                              <span className="text-xs text-gray-600">•</span>
-                              <span className="text-xs text-gray-500">
-                                {formatDate(transaction?.transaction_date)}
-                              </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm sm:text-base font-medium text-white">{transaction?.notes || 'Transaksi'}</p>
+                            <div className="mt-0.5 sm:mt-1 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                              <Badge variant="outline" className="border-gray-700 bg-[#0F0F0F] text-[9px] sm:text-xs text-gray-400">{transaction?.category}</Badge>
+                              <span className="text-[10px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-none">{transaction.accounts?.name}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="text-right flex items-center gap-4">
-                          <p
-                            className={`font-mono text-lg font-semibold tabular-nums ${
-                              amount >= 0 ? 'text-emerald-400' : 'text-red-400'
-                            }`}
-                          >
-                            {amount >= 0 ? '+' : ''}
-                            {formatCurrency(amount)}
+                        <div className="flex items-center gap-2 sm:gap-4 pl-2 text-right">
+                          <p className={`font-mono text-sm sm:text-lg font-semibold tabular-nums whitespace-nowrap ${amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {amount >= 0 ? '+' : ''}{formatCurrency(amount)}
                           </p>
-                          <button
-                            onClick={() => handleDeleteTransaction(transaction.id)}
-                            className="rounded-md p-2 text-gray-600 transition-colors hover:bg-red-500/10 hover:text-red-400"
-                            title="Hapus transaksi"
-                            aria-label="Hapus transaksi"
-                          >
-                            <Trash2 className="h-4 w-4" />
+                          <button onClick={() => handleDeleteTransaction(transaction.id)} className="p-1 sm:p-2 text-gray-600 hover:text-red-400">
+                            <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           </button>
                         </div>
                       </div>
                     );
                   })}
-                  {filteredTransactions.length === 0 && (
-                    <div className="px-4 py-10 text-center text-sm text-gray-500">
-                      Tidak ada transaksi untuk filter ini.
-                    </div>
-                  )}
+                  {filteredTransactions.length === 0 && <div className="p-8 text-center text-sm text-gray-500">Tidak ada transaksi.</div>}
                 </div>
               </CardContent>
             </Card>
@@ -871,74 +679,31 @@ export default function Dashboard() {
 
           <div>
             <Card className="border-gray-800 bg-[#1A1A1A]">
-              <CardHeader className="border-b border-gray-800">
-                <CardTitle className="text-lg font-semibold text-white">Akun Saya</CardTitle>
+              <CardHeader className="border-b border-gray-800 p-4 sm:p-6">
+                <CardTitle className="text-base sm:text-lg font-semibold text-white">Akun Saya</CardTitle>
               </CardHeader>
               <CardContent className="p-4">
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {accounts.map((account) => {
                     const Icon = getAccountIcon(account.type);
                     const color = getAccountColor(account.type);
-                    const accountSelected = txFilter.accountId === account.id;
                     return (
-                      <div
-                        key={account.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setTxFilter({ type: 'all', accountId: account.id })}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setTxFilter({ type: 'all', accountId: account.id });
-                          }
-                        }}
-                        className={cn(
-                          'flex cursor-pointer items-center justify-between rounded-lg border bg-[#0F0F0F] p-4 transition-colors hover:bg-[#1A1A1A]',
-                          accountSelected
-                            ? 'border-cyan-500/45 ring-1 ring-cyan-500/25'
-                            : 'border-gray-800 hover:border-gray-700'
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-800">
-                            <Icon className={`h-5 w-5 ${color}`} />
-                          </div>
+                      <div key={account.id} onClick={() => setTxFilter({ type: 'all', accountId: account.id })} className={cn('flex cursor-pointer items-center justify-between rounded-lg border bg-[#0F0F0F] p-3 sm:p-4', txFilter.accountId === account.id ? 'border-cyan-500/45' : 'border-gray-800')}>
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-gray-800"><Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${color}`} /></div>
                           <div>
-                            <p className="font-medium text-white">{account.name}</p>
-                            <p className="text-xs text-gray-500">{account.type}</p>
+                            <p className="text-sm sm:text-base font-medium text-white">{account.name}</p>
+                            <p className="text-[10px] sm:text-xs text-gray-500">{account.type}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-mono font-semibold tabular-nums text-white">
-                            {formatCurrency(toNumber(account.balance))}
-                          </p>
-                        </div>
+                        <p className="font-mono text-sm sm:text-base font-semibold text-white">{formatCurrency(toNumber(account.balance))}</p>
                       </div>
                     );
                   })}
                 </div>
-
-                <div className="mt-6 space-y-3">
-                  <Button
-                    className="w-full bg-emerald-600 hover:bg-emerald-700"
-                    onClick={() => {
-                      setTransactionDialogInitialType('income');
-                      setTransactionDialogOpen(true);
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Tambah Transaksi Manual
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full border-gray-700 bg-[#0F0F0F] hover:bg-[#1A1A1A]"
-                    onClick={() => {
-                      setTransactionDialogInitialType('transfer');
-                      setTransactionDialogOpen(true);
-                    }}
-                  >
-                    <ArrowRightLeft className="mr-2 h-4 w-4" />
-                    Transfer Antar Akun
+                <div className="mt-4 sm:mt-6 space-y-2 sm:space-y-3">
+                  <Button className="w-full h-9 sm:h-10 text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-700" onClick={() => { setTransactionDialogInitialType('income'); setTransactionDialogOpen(true); }}>
+                    <Plus className="mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" /> Tambah Transaksi
                   </Button>
                 </div>
               </CardContent>
@@ -948,139 +713,37 @@ export default function Dashboard() {
       </div>
 
       <button
-        type="button"
         onClick={() => setShowAIAssistant(!showAIAssistant)}
-        className="group fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-cyan-500/30 bg-[#111] shadow-[0_0_0_1px_rgba(6,182,212,0.15)] shadow-lg shadow-black/60 transition-transform hover:scale-105 hover:border-cyan-400/50 hover:shadow-cyan-500/20"
-        aria-label="Buka analitik AI"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full border border-cyan-500/30 bg-[#111] shadow-lg shadow-black/60"
       >
-        <LineChart className="h-7 w-7 text-cyan-400 transition-colors group-hover:text-cyan-300" strokeWidth={2.25} />
+        <LineChart className="h-5 w-5 sm:h-7 sm:w-7 text-cyan-400" />
       </button>
 
       {showAIAssistant && (
-        <div className="fixed bottom-24 right-6 z-50 w-[min(100vw-3rem,26rem)] overflow-hidden rounded-2xl border border-cyan-500/20 bg-[#0d0d0d] shadow-[0_24px_80px_-12px_rgba(0,0,0,0.85)] ring-1 ring-white/5">
-          <div className="relative border-b border-white/[0.06] bg-gradient-to-r from-[#141414] via-[#101010] to-[#141414] px-4 py-3">
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-cyan-500/35 bg-[#1a1a1a] shadow-inner">
-                  <Terminal className="h-5 w-5 text-cyan-400" strokeWidth={2.25} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
-                    Terminal analitik
-                  </h3>
-                  <p className="text-[11px] text-gray-500">Gemini · stream</p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowAIAssistant(false)}
-                className="h-8 w-8 shrink-0 rounded-lg p-0 text-gray-400 hover:bg-white/5 hover:text-white"
-                aria-label="Tutup chat"
-              >
-                ✕
-              </Button>
-            </div>
+        <div className="fixed bottom-20 right-4 sm:bottom-24 sm:right-6 z-50 w-[min(calc(100vw-2rem),26rem)] overflow-hidden rounded-2xl border border-cyan-500/20 bg-[#0d0d0d] shadow-2xl">
+          <div className="relative border-b border-white/[0.06] bg-[#141414] px-4 py-3 flex justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold text-white">Terminal Analitik</h3>
+            <button onClick={() => setShowAIAssistant(false)} className="text-gray-400">✕</button>
           </div>
-
-          <div className="flex h-[min(26rem,70vh)] flex-col p-4">
-            <div
-              ref={chatScrollRef}
-              className="flex-1 space-y-4 overflow-y-auto pr-1"
-            >
-              {chatMessages.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center px-2 text-center">
-                  <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-xl border border-cyan-500/25 bg-[#1a1a1a]">
-                    <Activity className="h-7 w-7 text-cyan-400" strokeWidth={2} />
+          <div className="flex h-[50vh] sm:h-[min(26rem,70vh)] flex-col p-3 sm:p-4">
+            <div ref={chatScrollRef} className="flex-1 space-y-4 overflow-y-auto pr-1">
+              {chatMessages.map((m, i) => (
+                <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[90%] rounded-xl px-3 py-2 text-[13px] sm:text-sm ${m.role === 'user' ? 'bg-emerald-600 text-white' : 'bg-[#2A2A2A] text-gray-100'}`}>
+                    <p className="whitespace-pre-wrap">{renderBoldMarkdown(getMessageText(m), m.role as 'user' | 'assistant')}</p>
                   </div>
-                  <p className="text-sm text-gray-300">Menghubungkan terminal…</p>
-                  <p className="mt-1 text-xs text-gray-500">Query saldo, alokasi, dan arus kas.</p>
                 </div>
-              ) : (
-                chatMessages.map((m, i) => {
-                  const text = getMessageText(m);
-                  const isUser = m.role === 'user';
-                  const isLast = i === chatMessages.length - 1;
-                  const showTypingCursor =
-                    !isUser && isLast && chatBusy && chatStatus === 'streaming';
-
-                  if (isUser) {
-                    return (
-                      <div key={m.id} className="flex justify-end">
-                        <div className="max-w-[88%] rounded-2xl rounded-br-md bg-gradient-to-br from-emerald-600/95 via-emerald-600/85 to-emerald-800/90 px-4 py-2.5 text-sm leading-relaxed text-white shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-400/20">
-                          <p className="whitespace-pre-wrap">{renderBoldMarkdown(text, 'user')}</p>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div key={m.id} className="flex justify-start gap-2.5">
-                      <div
-                        className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-cyan-500/20 bg-[#1f1f1f]"
-                        aria-hidden
-                      >
-                        <LineChart className="h-4 w-4 text-cyan-400" strokeWidth={2.25} />
-                      </div>
-                      <div className="max-w-[88%] rounded-2xl rounded-bl-md bg-[#2A2A2A] px-4 py-2.5 text-sm leading-relaxed text-gray-100 shadow-inner ring-1 ring-white/[0.06]">
-                        <p className="whitespace-pre-wrap">
-                          {renderBoldMarkdown(text, 'assistant')}
-                          {showTypingCursor && (
-                            <span
-                              className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse rounded-sm bg-cyan-400 align-middle"
-                              aria-hidden
-                            />
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              {chatError && (
-                <div className="rounded-xl border border-red-500/35 bg-red-950/50 px-3 py-2 text-xs text-red-100">
-                  {chatError.message}
-                </div>
-              )}
+              ))}
             </div>
-
-            <form
-              className="mt-4 flex gap-2 border-t border-white/[0.06] pt-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const trimmed = input.trim();
-                if (!trimmed || chatBusy) return;
-                setInput('');
-                void sendMessage({ text: trimmed });
-              }}
-            >
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Tulis pertanyaan…"
-                disabled={chatBusy}
-                className="flex-1 rounded-xl border-gray-700/80 bg-[#0c0c0c] text-gray-100 placeholder:text-gray-500 focus-visible:ring-emerald-500/30"
-              />
-              <Button
-                type="submit"
-                disabled={chatBusy || !input.trim()}
-                className="shrink-0 rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 px-5 text-white shadow-lg shadow-emerald-900/30 hover:from-emerald-500 hover:to-emerald-600"
-              >
-                {chatBusy ? '…' : 'Kirim'}
-              </Button>
+            <form className="mt-3 flex gap-2 border-t border-gray-800 pt-3" onSubmit={(e) => { e.preventDefault(); if (input.trim() && !chatBusy) { sendMessage({ text: input }); setInput(''); } }}>
+              <Input value={input} onChange={(e) => setInput(e.target.value)} disabled={chatBusy} className="h-9 sm:h-10 text-xs sm:text-sm bg-[#0c0c0c] text-white border-gray-700" placeholder="Tanya AI..." />
+              <Button type="submit" disabled={chatBusy || !input.trim()} className="h-9 sm:h-10 bg-emerald-600 px-3 sm:px-4 text-xs sm:text-sm">Kirim</Button>
             </form>
           </div>
         </div>
       )}
 
-      <TransactionDialog
-        open={transactionDialogOpen}
-        onOpenChange={setTransactionDialogOpen}
-        initialType={transactionDialogInitialType}
-        accounts={accounts}
-        onSubmitted={() => fetchData()}
-      />
+      <TransactionDialog open={transactionDialogOpen} onOpenChange={setTransactionDialogOpen} initialType={transactionDialogInitialType} accounts={accounts} onSubmitted={() => fetchData()} />
     </div>
   );
 }
