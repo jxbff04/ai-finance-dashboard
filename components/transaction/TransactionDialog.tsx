@@ -1,635 +1,232 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRightLeft, Plus } from 'lucide-react';
-import { toast } from 'sonner';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { useState, useEffect } from 'react';
+import { Sparkles, Calendar as CalendarIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
-export type TransactionFormType = 'income' | 'expense' | 'transfer';
-
-export type DashboardAccount = {
-  id: string;
-  name: string;
-  type: string;
-  balance: string | number | null;
-};
-
-type Category = {
-  id: string;
-  name: string;
-};
-
-type Props = {
+interface TransactionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialType: TransactionFormType;
-  accounts: DashboardAccount[];
-  onSubmitted: () => Promise<void>;
-};
+  initialType: 'income' | 'expense' | 'transfer';
+  accounts: any[];
+  onSubmitted: () => void;
+}
 
-const TRANSFER_CATEGORY_NAME = 'Transfer';
-
-const toNumber = (value: unknown): number => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  if (typeof value === 'string') {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-};
-
-const getTodayDateInputValue = () => {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`; // format yang dibutuhkan oleh <input type="date" />
-};
-
-export default function TransactionDialog({
-  open,
-  onOpenChange,
-  initialType,
-  accounts,
-  onSubmitted,
-}: Props) {
-  const [type, setType] = useState<TransactionFormType>(initialType);
-  const [amount, setAmount] = useState<string>('');
-  const [sourceAccountId, setSourceAccountId] = useState<string>('');
-  const [destinationAccountId, setDestinationAccountId] = useState<string>('');
-  const [categoryId, setCategoryId] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
-  const today = getTodayDateInputValue();
-  const [date, setDate] = useState<string>(today);
-
-  const [aiText, setAiText] = useState<string>('');
-  const [aiFilling, setAiFilling] = useState(false);
-
-  const didInitRef = useRef(false);
-
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
-
-  const [formError, setFormError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const transferCategoryId = useMemo(() => {
-    const found = categories.find(
-      (c) => c.name.trim().toLowerCase() === TRANSFER_CATEGORY_NAME.toLowerCase()
-    );
-    return found?.id ?? '';
-  }, [categories]);
-
-  const defaultSourceId = useMemo(() => accounts[0]?.id ?? '', [accounts]);
-  const defaultDestinationId = useMemo(() => {
-    if (accounts.length < 2) return '';
-    const first = accounts[0]?.id ?? '';
-    const candidate = accounts.find((a) => a.id !== first)?.id;
-    return candidate ?? accounts[1]?.id ?? '';
-  }, [accounts]);
+export default function TransactionDialog({ open, onOpenChange, initialType, accounts, onSubmitted }: TransactionDialogProps) {
+  const [type, setType] = useState(initialType);
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState<Date | undefined>(new Date()); // Menggunakan Date object untuk Kalender
+  const [accountId, setAccountId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [notes, setNotes] = useState('');
+  
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!open) {
-      didInitRef.current = false;
-      return;
+    if (open) {
+      setType(initialType);
+      setAmount(''); setNotes(''); setAiPrompt(''); setAccountId(''); setCategoryId('');
+      setDate(new Date()); // Reset ke hari ini saat modal dibuka
+      fetchCategories();
     }
+  }, [open, initialType]);
 
-    // Hindari reset state berulang ketika parent re-render saat dialog masih terbuka.
-    if (didInitRef.current) return;
-    didInitRef.current = true;
+  const fetchCategories = async () => {
+    const { data } = await supabase.from('categories').select('*');
+    if (data) setCategories(data);
+  };
 
-    const nextType = initialType ?? 'income';
-    setType(nextType);
-    setAmount('');
-    setDescription('');
-    setDate(getTodayDateInputValue());
-    setAiText('');
-    setFormError(null);
-
-    setSourceAccountId(defaultSourceId);
-    setDestinationAccountId(nextType === 'transfer' ? defaultDestinationId : '');
-    setCategoryId('');
-  }, [open, initialType, defaultSourceId, defaultDestinationId]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (categories.length > 0) return;
-
-    let cancelled = false;
-
-    const fetchCategories = async () => {
-      setCategoriesLoading(true);
-      setCategoriesError(null);
-      try {
-        // Expecting table shape: `categories(id, name)`
-        const { data, error } = await supabase
-          .from('categories')
-          .select('id, name')
-          .order('name', { ascending: true });
-
-        if (error) throw error;
-
-        const normalized: Category[] = (data ?? [])
-          .map((c: any) => ({
-            id: String(c.id ?? ''),
-            name: String(c.name ?? '').trim(),
-          }))
-          .filter((c: Category) => c.id.length > 0 && c.name.length > 0);
-
-        if (!cancelled) setCategories(normalized);
-      } catch (err) {
-        if (cancelled) return;
-        console.error('Failed to fetch categories:', err);
-        setCategoriesError('Gagal mengambil daftar kategori. Silakan coba lagi.');
-        // If categories can't be loaded, avoid guessing IDs (schema-dependent).
-        // The UI will show the error and disable submit until data is available.
-        setCategories([]);
-      } finally {
-        if (!cancelled) setCategoriesLoading(false);
-      }
-    };
-
-    fetchCategories();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, type, categories.length]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (type === 'transfer') return;
-    if (categories.length === 0) return;
-
-    // If user switches type (e.g., from transfer back to income/expense), prefill category.
-    if (!categoryId) {
-      setCategoryId(categories[0]?.id ?? '');
-    }
-  }, [open, type, categories, categoryId]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (type !== 'transfer') return;
-    if (!destinationAccountId) {
-      // Prefer destination != source.
-      const candidate = accounts.find((a) => a.id !== sourceAccountId)?.id ?? '';
-      if (candidate && candidate !== sourceAccountId) setDestinationAccountId(candidate);
-    }
-  }, [open, type, destinationAccountId, accounts, sourceAccountId]);
-
-  const title = useMemo(() => {
-    if (type === 'transfer') return 'Transfer Antar Akun';
-    if (type === 'income') return 'Tambah Transaksi Manual';
-    return 'Tambah Transaksi Pengeluaran';
-  }, [type]);
-
-  const submitDisabled = useMemo(() => {
-    if (submitting || aiFilling) return true;
-    if (!amount) return true;
-    if (!sourceAccountId) return true;
-    if (!date) return true;
-    if (type === 'transfer') {
-      return !destinationAccountId || destinationAccountId === sourceAccountId;
-    }
-    if (!categoryId) return true;
-    return false;
-  }, [submitting, aiFilling, amount, sourceAccountId, type, destinationAccountId, categoryId, date]);
-
-  const handleAutoFillWithAI = async () => {
-    const trimmed = aiText.trim();
-    if (!trimmed) {
-      setFormError('Teks transaksi untuk AI masih kosong.');
-      return;
-    }
-
+  const handleAutoFill = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsLoadingAI(true);
     try {
-      setAiFilling(true);
-      setFormError(null);
-
       const res = await fetch('/api/parse-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: trimmed,
-          accounts: accounts.map((a) => ({ id: a.id, name: a.name, type: a.type })),
-          categories: categories.map((c) => ({ id: c.id, name: c.name })),
-        }),
+        body: JSON.stringify({ text: aiPrompt })
       });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
 
-      const body = (await res.json()) as any;
-      if (!res.ok) {
-        throw new Error(body?.error || 'Gagal mengisi form dari AI.');
+      setType(data.type);
+      setAmount(String(data.amount));
+      setNotes(data.notes);
+      
+      // Parsing tanggal dari string (YYYY-MM-DD) yang dikirim AI menjadi Date Object
+      if (data.date) {
+        setDate(new Date(data.date));
       }
 
-      const nextType = body?.type as TransactionFormType | undefined;
-      const nextAmountNum = Number(body?.amount);
-      const nextAccountId = body?.account_id;
-      const nextCategoryId = body?.category_id;
-      const nextNotes = body?.notes ?? '';
-
-      if (
-        !nextType ||
-        !nextAccountId ||
-        !Number.isFinite(nextAmountNum) ||
-        nextAmountNum <= 0 ||
-        typeof nextCategoryId !== 'string'
-      ) {
-        throw new Error('AI tidak dapat memahami transaksi. Coba ulang dengan teks yang lebih spesifik.');
+      if (data.account_name) {
+        const matchedAcc = accounts.find(a => a.name.toLowerCase().includes(data.account_name.toLowerCase()));
+        if (matchedAcc) setAccountId(String(matchedAcc.id));
       }
-
-      setType(nextType);
-      setAmount(String(Math.abs(nextAmountNum)));
-      setSourceAccountId(String(nextAccountId));
-      setCategoryId(nextCategoryId);
-      setDescription(String(nextNotes));
-
-      if (nextType === 'transfer') {
-        const destCandidate = accounts.find((a) => a.id !== String(nextAccountId))?.id ?? '';
-        setDestinationAccountId(destCandidate);
-      } else {
-        setDestinationAccountId('');
+      if (data.category_name) {
+        const matchedCat = categories.find(c => c.name.toLowerCase().includes(data.category_name.toLowerCase()));
+        if (matchedCat) setCategoryId(String(matchedCat.id));
       }
-
-      setFormError(null);
-    } catch (err) {
-      console.error(err);
-      const anyErr = err as any;
-      const message =
-        (anyErr && typeof anyErr.message === 'string' && anyErr.message) ||
-        'Gagal mengisi form otomatis dengan AI.';
-      setFormError(message);
+      
+      toast.success('Berhasil diisi otomatis!');
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal auto-fill');
     } finally {
-      setAiFilling(false);
+      setIsLoadingAI(false);
     }
   };
 
   const handleSubmit = async () => {
-    setFormError(null);
-    const parsedAmount = Number(amount);
-
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setFormError('Nominal harus berupa angka lebih dari 0.');
-      return;
-    }
-
-    if (!sourceAccountId) {
-      setFormError('Pilih Akun Sumber terlebih dahulu.');
-      return;
-    }
-
-    const sourceAccount = accounts.find((a) => a.id === sourceAccountId);
-    if (!sourceAccount) {
-      setFormError('Akun Sumber tidak ditemukan.');
-      return;
-    }
-
-    const dateParsed = date
-      ? new Date(`${date}T00:00:00`)
-      : new Date();
-    const transactionDateIso = Number.isNaN(dateParsed.getTime())
-      ? new Date().toISOString()
-      : dateParsed.toISOString();
-    const safeDescription = description.trim();
-
+    if (!amount || !accountId || !date) return toast.error('Nominal, Akun, dan Tanggal wajib diisi');
+    setIsSubmitting(true);
     try {
-      setSubmitting(true);
+      const finalAmount = type === 'expense' ? -Math.abs(Number(amount)) : Math.abs(Number(amount));
 
-      if (type === 'transfer') {
-        if (!destinationAccountId || destinationAccountId === sourceAccountId) {
-          setFormError('Akun Tujuan harus berbeda dengan Akun Sumber.');
-          return;
-        }
-
-        const destinationAccount = accounts.find((a) => a.id === destinationAccountId);
-        if (!destinationAccount) {
-          setFormError('Akun Tujuan tidak ditemukan.');
-          return;
-        }
-
-        // 1) Insert 1 transaction row for transfer
-        // Schema: `account_id` (sumber), `to_account_id` (tujuan), `category_id` (opsional)
-        const transferRow: Record<string, unknown> = {
-          account_id: sourceAccountId,
-          to_account_id: destinationAccountId,
-          notes: safeDescription || '',
-          amount: Math.abs(parsedAmount),
-          type: 'transfer',
-          transaction_date: transactionDateIso,
-        };
-
-        const resolvedTransferCategoryId = transferCategoryId || categoryId;
-        if (resolvedTransferCategoryId) {
-          transferRow.category_id = resolvedTransferCategoryId;
-        }
-
-        const { error: insertError } = await supabase
-          .from('transactions')
-          .insert(transferRow);
-        if (insertError) throw insertError;
-
-        // 2) Update balances
-        const sourceNewBalance = toNumber(sourceAccount.balance) - Math.abs(parsedAmount);
-        const destinationNewBalance =
-          toNumber(destinationAccount.balance) + Math.abs(parsedAmount);
-
-        const { error: srcUpdateError } = await supabase
-          .from('accounts')
-          .update({ balance: sourceNewBalance })
-          .eq('id', sourceAccountId);
-        if (srcUpdateError) throw srcUpdateError;
-
-        const { error: dstUpdateError } = await supabase
-          .from('accounts')
-          .update({ balance: destinationNewBalance })
-          .eq('id', destinationAccountId);
-        if (dstUpdateError) throw dstUpdateError;
-      } else {
-        if (!categoryId) {
-          setFormError('Pilih Kategori terlebih dahulu.');
-          return;
-        }
-
-        const isIncome = type === 'income';
-        const delta = Math.abs(parsedAmount);
-        const signedAmount = isIncome ? delta : -delta;
-        const nextBalance = toNumber(sourceAccount.balance) + (isIncome ? delta : -delta);
-
-        const { error: insertError } = await supabase.from('transactions').insert({
-          account_id: sourceAccountId,
-          notes: safeDescription || '',
-          category_id: categoryId,
-          amount: signedAmount,
-          type,
-          transaction_date: transactionDateIso,
-        });
-        if (insertError) throw insertError;
-
-        const { error: updateError } = await supabase
-          .from('accounts')
-          .update({ balance: nextBalance })
-          .eq('id', sourceAccountId);
-        if (updateError) throw updateError;
-      }
-
-      toast.success('✨ Transaksi berhasil disimpan!');
-      await onSubmitted();
+      const { error } = await supabase.from('transactions').insert({
+        account_id: accountId,
+        category_id: categoryId || null,
+        amount: finalAmount,
+        type,
+        notes,
+        transaction_date: format(date, 'yyyy-MM-dd') // Kembalikan ke format database
+      });
+      if (error) throw error;
+      toast.success('Transaksi berhasil disimpan');
+      onSubmitted();
       onOpenChange(false);
-    } catch (err) {
-      console.error(err);
-
-      const anyErr = err as any;
-      const rawMessage =
-        (anyErr && typeof anyErr.message === 'string' && anyErr.message) ||
-        (err instanceof Error ? err.message : null) ||
-        'Gagal menyimpan transaksi.';
-
-      const details =
-        anyErr && typeof anyErr.details === 'string' ? anyErr.details : undefined;
-      const hint = anyErr && typeof anyErr.hint === 'string' ? anyErr.hint : undefined;
-
-      const messageToShow = [
-        rawMessage,
-        details ? `Details: ${details}` : null,
-        hint ? `Hint: ${hint}` : null,
-      ]
-        .filter(Boolean)
-        .join('\n');
-
-      setFormError(messageToShow);
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal menyimpan transaksi');
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        // Keep behavior predictable: if user closes, reset any inline errors.
-        if (!nextOpen) setFormError(null);
-        onOpenChange(nextOpen);
-      }}
-    >
-      <DialogContent className="max-w-2xl border-gray-800 bg-[#1A1A1A] p-6 text-gray-100 shadow-2xl [&>button.absolute]:text-gray-300 [&>button.absolute]:hover:text-white">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-500/20">
-                {type === 'transfer' ? (
-                  <ArrowRightLeft className="h-5 w-5 text-emerald-300" />
-                ) : (
-                  <Plus className="h-5 w-5 text-emerald-300" />
-                )}
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-white">{title}</h2>
-                <p className="text-xs text-gray-400">Isi detail transaksi Anda.</p>
-              </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px] bg-[#0A0A0A] border-gray-800 text-white">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold">Tambah {type === 'income' ? 'Pemasukan' : 'Pengeluaran'}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-4">
+          <div className="space-y-2 bg-[#141414] p-3 rounded-xl border border-gray-800">
+            <Textarea 
+              placeholder="Contoh: Beli makan siang 45 ribu pakai Gopay" 
+              value={aiPrompt} 
+              onChange={(e) => setAiPrompt(e.target.value)}
+              className="resize-none bg-[#1c1c1c] text-white border-gray-700 placeholder:text-gray-500"
+            />
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleAutoFill} disabled={isLoadingAI} className="bg-cyan-600 hover:bg-cyan-500 text-white">
+                <Sparkles className="w-4 h-4 mr-2" />
+                {isLoadingAI ? 'Memproses...' : 'Isi Otomatis dengan AI'}
+              </Button>
             </div>
           </div>
-        </div>
 
-        <div className="mt-4 space-y-3">
-          <Textarea
-            value={aiText}
-            onChange={(e) => setAiText(e.target.value)}
-            placeholder="Contoh: Beli kopi 30000 pakai gopay untuk kategori makan"
-            className="min-h-[72px] border-gray-800 bg-[#0F0F0F] text-gray-100 placeholder:text-gray-500"
-          />
-          <div className="flex items-center justify-end gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="border-gray-700 bg-[#0F0F0F] text-gray-200 hover:bg-[#1A1A1A] hover:text-white"
-              onClick={handleAutoFillWithAI}
-              disabled={aiFilling || submitting || !aiText.trim()}
-            >
-              {aiFilling ? '🤖 Robot sedang berpikir...' : '✨ Isi Otomatis dengan AI'}
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          {/* Tipe */}
-          <div className="sm:col-span-2">
-            <Label className="mb-2 block text-sm font-medium text-gray-200">Tipe</Label>
-            <Select
-              value={type}
-              onValueChange={(v) => {
-                const nextType = v as TransactionFormType;
-                setType(nextType);
-                setFormError(null);
-                if (nextType === 'transfer') {
-                  setCategoryId('');
-                } else {
-                  setCategoryId('');
-                  setDestinationAccountId('');
-                }
-              }}
-            >
-              <SelectTrigger className="border-gray-800 bg-[#0F0F0F] text-gray-100">
-                <SelectValue placeholder="Pilih tipe transaksi" />
-              </SelectTrigger>
-              <SelectContent className="border border-gray-800 bg-[#0F0F0F] text-gray-100">
-                <SelectItem value="income">Pemasukan</SelectItem>
-                <SelectItem value="expense">Pengeluaran</SelectItem>
-                <SelectItem value="transfer">Transfer</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Nominal */}
-          <div className="sm:col-span-1">
-            <Label className="mb-2 block text-sm font-medium text-gray-200">Nominal</Label>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              step={1}
-              placeholder="0"
-              className="border-gray-800 bg-[#0F0F0F] text-gray-100 placeholder:text-gray-500"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-gray-400">Masukkan nominal dalam Rupiah.</p>
-          </div>
-
-          {/* Tanggal Transaksi */}
-          <div className="sm:col-span-1">
-            <Label className="mb-2 block text-sm font-medium text-gray-200">Tanggal Transaksi</Label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => {
-                setDate(e.target.value);
-                setFormError(null);
-              }}
-              className="h-9 w-full rounded-md border border-gray-800 bg-[#0F0F0F] px-3 text-sm text-gray-100 outline-none focus:border-gray-600"
-            />
-          </div>
-
-          {/* Akun Sumber */}
-          <div className="sm:col-span-1">
-            <Label className="mb-2 block text-sm font-medium text-gray-200">Akun Sumber</Label>
-            <Select value={sourceAccountId} onValueChange={setSourceAccountId}>
-              <SelectTrigger className="border-gray-800 bg-[#0F0F0F] text-gray-100">
-                <SelectValue placeholder="Pilih akun sumber" />
-              </SelectTrigger>
-              <SelectContent className="border border-gray-800 bg-[#0F0F0F] text-gray-100">
-                {accounts.map((acc) => (
-                  <SelectItem key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Kategori (hide for transfer) */}
-          {type !== 'transfer' && (
-            <div className="sm:col-span-1">
-              <Label className="mb-2 block text-sm font-medium text-gray-200">Kategori</Label>
-              <Select
-                value={categoryId}
-                onValueChange={(v) => {
-                  setCategoryId(v);
-                  setFormError(null);
-                }}
-              >
-                <SelectTrigger
-                  className="border-gray-800 bg-[#0F0F0F] text-gray-100"
-                  disabled={categoriesLoading}
-                >
-                  <SelectValue placeholder="Pilih kategori" />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-400 mb-1 block">Tipe</label>
+              <Select value={type} onValueChange={(v: any) => setType(v)}>
+                <SelectTrigger className="bg-[#141414] text-white border-gray-700 focus:ring-cyan-500">
+                  <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="border border-gray-800 bg-[#0F0F0F] text-gray-100">
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
+                <SelectContent className="bg-[#1c1c1c] text-white border-gray-800">
+                  <SelectItem value="expense">Pengeluaran</SelectItem>
+                  <SelectItem value="income">Pemasukan</SelectItem>
+                  <SelectItem value="transfer">Transfer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* INI ADALAH KALENDER MODERN YANG BARU */}
+            <div className="space-y-1 flex flex-col">
+              <label className="text-xs font-semibold text-gray-400 mb-1">Tanggal</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal bg-[#141414] border-gray-700 hover:bg-[#1c1c1c] hover:text-white transition-all focus-visible:ring-cyan-500",
+                      !date && "text-gray-500"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 text-cyan-500 shrink-0" />
+                    {date ? format(date, "d MMM yyyy", { locale: idLocale }) : <span>Pilih tanggal</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-gray-800 text-white shadow-2xl" align="center">
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={setDate}
+                    initialFocus
+                    className="bg-[#0A0A0A] text-white rounded-lg border border-gray-800"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-400 block mb-1">Nominal</label>
+            <Input type="number" placeholder="45000" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-[#141414] text-white border-gray-700 placeholder:text-gray-500 focus-visible:ring-cyan-500" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-400 block mb-1">Akun Sumber</label>
+              <Select value={accountId} onValueChange={setAccountId}>
+                <SelectTrigger className="bg-[#141414] text-white border-gray-700 focus:ring-cyan-500">
+                  <SelectValue placeholder="Pilih akun" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1c1c1c] text-white border-gray-800">
+                  {accounts.map(acc => (
+                    <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {categoriesError && <p className="mt-1 text-xs text-red-400">{categoriesError}</p>}
             </div>
-          )}
-
-          {/* Akun Tujuan (transfer only) */}
-          {type === 'transfer' && (
-            <div className="sm:col-span-1">
-              <Label className="mb-2 block text-sm font-medium text-gray-200">Akun Tujuan</Label>
-              <Select
-                value={destinationAccountId}
-                onValueChange={(v) => {
-                  setDestinationAccountId(v);
-                  setFormError(null);
-                }}
-              >
-                <SelectTrigger className="border-gray-800 bg-[#0F0F0F] text-gray-100">
-                  <SelectValue placeholder="Pilih akun tujuan" />
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-400 block mb-1">Kategori</label>
+              <Select value={categoryId} onValueChange={setCategoryId}>
+                <SelectTrigger className="bg-[#141414] text-white border-gray-700 focus:ring-cyan-500">
+                  <SelectValue placeholder="Pilih kategori" />
                 </SelectTrigger>
-                <SelectContent className="border border-gray-800 bg-[#0F0F0F] text-gray-100">
-                  {accounts
-                    .filter((acc) => acc.id !== sourceAccountId)
-                    .map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id}>
-                        {acc.name}
-                      </SelectItem>
-                    ))}
+                <SelectContent className="bg-[#1c1c1c] text-white border-gray-800 max-h-48">
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <p className="mt-1 text-xs text-gray-400">
-                Transfer akan mencatat 2 transaksi: keluar (sumber) dan masuk (tujuan).
-              </p>
             </div>
-          )}
-
-          {/* Catatan */}
-          <div className="sm:col-span-2">
-            <Label className="mb-2 block text-sm font-medium text-gray-200">Catatan</Label>
-            <Textarea
-              placeholder="Opsional. Misalnya: Biaya internet, Transfer ke DANA..."
-              className="min-h-[90px] border-gray-800 bg-[#0F0F0F] text-gray-100 placeholder:text-gray-500"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
           </div>
 
-          {formError && (
-            <div className="sm:col-span-2 rounded-lg border border-red-800 bg-red-950/30 p-3 text-sm text-red-200">
-              {formError}
-            </div>
-          )}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-400 block mb-1">Catatan</label>
+            <Input placeholder="Beli makan siang" value={notes} onChange={(e) => setNotes(e.target.value)} className="bg-[#141414] text-white border-gray-700 placeholder:text-gray-500 focus-visible:ring-cyan-500" />
+          </div>
         </div>
 
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="border-gray-700 bg-[#0F0F0F] text-gray-200 hover:bg-[#1A1A1A] hover:text-white"
-            onClick={() => onOpenChange(false)}
-            disabled={submitting || aiFilling}
-          >
-            Batal
-          </Button>
-          <Button
-            type="button"
-            className="bg-emerald-600 text-white hover:bg-emerald-700"
-            onClick={handleSubmit}
-            disabled={submitDisabled}
-          >
-            {submitting ? 'Menyimpan...' : 'Simpan Transaksi'}
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-gray-400 hover:text-white hover:bg-gray-800">Batal</Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+            {isSubmitting ? 'Menyimpan...' : 'Simpan Transaksi'}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
-
