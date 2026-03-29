@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import {
-  TrendingUp, TrendingDown, Plus, ArrowRightLeft, Building2, Banknote, Smartphone, Coins, Calendar as CalendarIcon, Download, Filter, Trash2, MessageSquare, AlertTriangle, Loader2, Moon, Sun
+  TrendingUp, TrendingDown, Plus, ArrowRightLeft, Building2, Banknote, Smartphone, Coins, Calendar as CalendarIcon, Download, Filter, Trash2, MessageSquare, AlertTriangle, Loader2, Moon, Sun, Pencil
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea'; // TAMBAHAN IMPORT TEXTAREA
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -27,6 +27,7 @@ interface Transaction { id: string; account_id: string; transaction_date: string
 interface Budget { id: string; category_name: string; amount: number; month: string; }
 interface Goal { id: string; name: string; target_amount: number; current_amount: number; deadline: string; }
 type TxFilter = { type: 'all' | 'income' | 'expense' | 'transfer'; accountId: 'all' | string; };
+type ActiveTab = 'Portfolios' | 'Budgets' | 'Targets';
 
 const PIE_COLORS = ['#000000', '#333333', '#666666', '#999999', '#cccccc', '#0f172a', '#334155'];
 
@@ -105,7 +106,9 @@ const formatDateForGrouping = (dateString: string): string => {
 
 export default function Dashboard() {
   const [showAIAssistant, setShowAIAssistant] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true); // Default to dark for Blackjack style
+  const [activeTab, setActiveTab] = useState<ActiveTab>('Portfolios');
+  
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -123,6 +126,10 @@ export default function Dashboard() {
   const [newGoalName, setNewGoalName] = useState('');
   const [newGoalTarget, setNewGoalTarget] = useState('');
   const [newGoalDeadline, setNewGoalDeadline] = useState<Date>();
+
+  const [editBalanceOpen, setEditBalanceOpen] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [newBalanceAmount, setNewBalanceAmount] = useState('');
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; type: 'transaction' | 'budget' | 'goal' | null; id: string | null }>({ isOpen: false, type: null, id: null });
   const [isDeleting, setIsDeleting] = useState(false);
@@ -169,6 +176,17 @@ export default function Dashboard() {
   }, [selectedMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleUpdateBalance = async () => {
+    if (!selectedAccount || newBalanceAmount === '') return toast.error('Amount is required');
+    try {
+      const { error } = await supabase.from('accounts').update({ balance: Number(newBalanceAmount) }).eq('id', selectedAccount.id);
+      if (error) throw error;
+      toast.success(`Balance updated for ${selectedAccount.name}`);
+      setEditBalanceOpen(false);
+      fetchData();
+    } catch (err) { toast.error('Failed to update balance'); }
+  };
 
   const confirmDelete = (type: 'transaction' | 'budget' | 'goal', id: string) => { setDeleteConfirm({ isOpen: true, type, id }); };
   const executeDelete = async () => {
@@ -249,19 +267,26 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-[#f3f4f6] dark:bg-[#050505] flex justify-center text-black dark:text-gray-100 font-sans transition-colors duration-300 selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black">
       
+      {/* Global Style to Hide Input Number Spinners */}
+      <style dangerouslySetInnerHTML={{__html: `
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+      `}} />
+
       <div className="w-full max-w-md bg-white dark:bg-[#0a0a0a] min-h-screen relative flex flex-col border-x border-gray-300 dark:border-gray-800 overflow-x-hidden shadow-sm transition-colors duration-300">
         
         {/* HEADER */}
         <header className="sticky top-0 z-30 bg-black dark:bg-[#000000] flex flex-col transition-colors duration-300">
           <div className="px-5 pt-6 pb-4 flex items-center justify-between">
             <h1 className="text-3xl font-sans font-bold tracking-tighter text-white leading-none">
-              Finance
+              Blackjack
             </h1>
             <div className="flex gap-2 items-center">
               <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1.5 rounded-full text-white hover:bg-gray-800 transition-colors">
                 {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
-              <Button variant="outline" size="sm" onClick={() => downloadTransactionsCsv(filteredTransactions, selectedMonth)} className="h-7 bg-transparent border-white text-white text-[10px] font-bold rounded-none hover:bg-white hover:text-black uppercase transition-colors">
+              <Button variant="outline" size="sm" onClick={() => downloadTransactionsCsv(filteredTransactions, selectedMonth)} className="h-7 bg-transparent border-white text-white text-[10px] font-bold rounded-none hover:bg-white hover:text-black uppercase transition-colors hidden sm:flex">
                 <Download className="w-3 h-3 mr-1" /> CSV
               </Button>
               <Button size="sm" onClick={() => { setTransactionDialogInitialType('expense'); setTransactionDialogOpen(true); }} className="h-7 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-none border-0 uppercase transition-colors">
@@ -276,11 +301,11 @@ export default function Dashboard() {
                <span className="bg-black dark:bg-white dark:text-black text-white px-2 py-0.5 text-[10px] font-bold transition-colors duration-300">NET WORTH</span>
                <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(totalNetWorth)}</span>
              </div>
-             <div className="flex gap-2 shrink-0 items-center ml-1">
+             <div className="flex gap-2 shrink-0 items-center ml-2">
                <span className="bg-green-600 text-white px-2 py-0.5 text-[10px] font-bold flex items-center">INFLOW <TrendingUp className="w-3 h-3 ml-1" /></span>
                <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(monthlyIncome)}</span>
              </div>
-             <div className="flex gap-2 shrink-0 items-center ml-1">
+             <div className="flex gap-2 shrink-0 items-center ml-2">
                <span className="bg-[#cc0000] text-white px-2 py-0.5 text-[10px] font-bold flex items-center">OUTFLOW <TrendingDown className="w-3 h-3 ml-1" /></span>
                <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300 pr-4">{formatCurrency(monthlyExpense)}</span>
              </div>
@@ -306,84 +331,97 @@ export default function Dashboard() {
           
           <div className="border-b border-black dark:border-gray-700 pb-2 animate-in fade-in slide-in-from-bottom-2 duration-500 transition-colors duration-300">
              <h2 className="text-4xl font-serif font-black tracking-tight text-black dark:text-white mb-1 transition-colors duration-300">Markets</h2>
-             <div className="flex gap-4 text-xs font-medium text-gray-600 dark:text-gray-400 mt-4 transition-colors duration-300">
-               <span className="text-black dark:text-white font-bold transition-colors duration-300">Portfolios</span>
-               <span>Budgets</span>
-               <span>Targets</span>
+             <div className="flex gap-5 text-xs font-medium text-gray-600 dark:text-gray-400 mt-4 transition-colors duration-300">
+               <span onClick={() => setActiveTab('Portfolios')} className={cn("cursor-pointer transition-colors duration-300", activeTab === 'Portfolios' ? "text-black dark:text-white font-bold" : "hover:text-black dark:hover:text-white")}>Portfolios</span>
+               <span onClick={() => setActiveTab('Budgets')} className={cn("cursor-pointer transition-colors duration-300", activeTab === 'Budgets' ? "text-black dark:text-white font-bold" : "hover:text-black dark:hover:text-white")}>Budgets</span>
+               <span onClick={() => setActiveTab('Targets')} className={cn("cursor-pointer transition-colors duration-300", activeTab === 'Targets' ? "text-black dark:text-white font-bold" : "hover:text-black dark:hover:text-white")}>Targets</span>
              </div>
           </div>
 
-          {/* PORTFOLIOS */}
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100">
-            <div className="grid grid-cols-2 gap-4">
-              {accounts.map((acc) => {
-                const isSelected = txFilter.accountId === acc.id;
-                return (
-                  <div key={acc.id} onClick={() => setTxFilter({ type: 'all', accountId: acc.id })} className={cn('cursor-pointer border-t border-b py-3 transition-all duration-300', isSelected ? 'border-black dark:border-white bg-gray-50 dark:bg-gray-900' : 'border-gray-200 dark:border-gray-800 hover:border-black dark:hover:border-gray-500')}>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{acc.type}</p>
-                    <p className="text-sm font-serif font-bold text-black dark:text-white truncate leading-tight mb-2 transition-colors duration-300">{acc.name}</p>
-                    <p className="text-xs font-bold text-black dark:text-gray-200 transition-colors duration-300">{formatCurrency(toNumber(acc.balance))}</p>
-                  </div>
-                );
-              })}
+          {/* DYNAMIC TAB CONTENT */}
+          
+          {/* TAB 1: PORTFOLIOS */}
+          {activeTab === 'Portfolios' && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100">
+              <div className="grid grid-cols-2 gap-4">
+                {accounts.map((acc) => {
+                  const isSelected = txFilter.accountId === acc.id;
+                  return (
+                    <div key={acc.id} onClick={() => setTxFilter({ type: 'all', accountId: acc.id })} className={cn('cursor-pointer border-t border-b py-3 transition-all duration-300 relative group', isSelected ? 'border-black dark:border-white bg-gray-50 dark:bg-gray-900' : 'border-gray-200 dark:border-gray-800 hover:border-black dark:hover:border-gray-500')}>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{acc.type}</p>
+                      <p className="text-sm font-serif font-bold text-black dark:text-white truncate leading-tight mb-2 transition-colors duration-300">{acc.name}</p>
+                      <div className="flex justify-between items-center">
+                        <p className="text-xs font-bold text-black dark:text-gray-200 transition-colors duration-300">{formatCurrency(toNumber(acc.balance))}</p>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedAccount(acc); setNewBalanceAmount(String(toNumber(acc.balance))); setEditBalanceOpen(true); }} className="text-gray-400 hover:text-blue-600 transition-colors">
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* BUDGETING */}
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
-            <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
-              <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Spending Limits</h3>
-              <button onClick={() => setBudgetDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300">Add Limit</button>
-            </div>
-            <div className="space-y-4">
-              {budgets.length > 0 ? budgets.map(budget => {
-                const spent = expenseByCategory.find(e => e.name.toLowerCase() === budget.category_name.toLowerCase())?.value || 0;
-                const percentage = Math.min((spent / budget.amount) * 100, 100);
-                const isOver = spent > budget.amount;
-                return (
-                  <div key={budget.id} className="group relative border-b border-gray-200 dark:border-gray-800 pb-3 transition-colors duration-300">
-                    <button onClick={() => confirmDelete('budget', budget.id)} className="absolute top-0 right-0 text-red-500/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-[#0a0a0a] pl-2"><Trash2 className="w-3.5 h-3.5" /></button>
-                    <div className="flex justify-between items-end mb-2">
-                      <p className="text-sm font-serif font-bold text-black dark:text-white capitalize transition-colors duration-300">{budget.category_name}</p>
-                      <p className={`text-xs font-bold ${isOver ? 'text-[#cc0000] dark:text-red-400' : 'text-gray-800 dark:text-gray-300'} transition-colors duration-300`}>{formatCurrency(spent)} <span className="text-gray-400 dark:text-gray-500 font-normal">/ {formatCurrency(budget.amount)}</span></p>
+          {/* TAB 2: BUDGETS */}
+          {activeTab === 'Budgets' && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
+              <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
+                <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Spending Limits</h3>
+                <button onClick={() => setBudgetDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300">Add Limit</button>
+              </div>
+              <div className="space-y-4">
+                {budgets.length > 0 ? budgets.map(budget => {
+                  const spent = expenseByCategory.find(e => e.name.toLowerCase() === budget.category_name.toLowerCase())?.value || 0;
+                  const percentage = Math.min((spent / budget.amount) * 100, 100);
+                  const isOver = spent > budget.amount;
+                  return (
+                    <div key={budget.id} className="group relative border-b border-gray-200 dark:border-gray-800 pb-3 transition-colors duration-300">
+                      <button onClick={() => confirmDelete('budget', budget.id)} className="absolute top-0 right-0 text-red-500/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-[#0a0a0a] pl-2"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <div className="flex justify-between items-end mb-2">
+                        <p className="text-sm font-serif font-bold text-black dark:text-white capitalize transition-colors duration-300">{budget.category_name}</p>
+                        <p className={`text-xs font-bold ${isOver ? 'text-[#cc0000] dark:text-red-400' : 'text-gray-800 dark:text-gray-300'} transition-colors duration-300`}>{formatCurrency(spent)} <span className="text-gray-400 dark:text-gray-500 font-normal">/ {formatCurrency(budget.amount)}</span></p>
+                      </div>
+                      <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden transition-colors duration-300">
+                        <div className={`h-full transition-all duration-1000 ${isOver ? 'bg-[#cc0000] dark:bg-red-500' : percentage > 80 ? 'bg-orange-500' : 'bg-green-600 dark:bg-green-500'}`} style={{ width: `${percentage}%` }}></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden transition-colors duration-300">
-                      <div className={`h-full transition-all duration-1000 ${isOver ? 'bg-[#cc0000] dark:bg-red-500' : percentage > 80 ? 'bg-orange-500' : 'bg-green-600 dark:bg-green-500'}`} style={{ width: `${percentage}%` }}></div>
-                    </div>
-                  </div>
-                )
-              }) : (<p className="text-sm text-gray-500 italic">No spending limits set.</p>)}
+                  )
+                }) : (<p className="text-sm text-gray-500 italic">No spending limits set.</p>)}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* GOALS */}
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-200">
-            <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
-              <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Financial Targets</h3>
-              <button onClick={() => setGoalDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300">Add Target</button>
-            </div>
-            <div className="space-y-4">
-              {goals.length > 0 ? goals.map(goal => {
-                const percentage = Math.min((toNumber(goal.current_amount) / toNumber(goal.target_amount)) * 100, 100);
-                return (
-                  <div key={goal.id} className="group relative border-b border-gray-200 dark:border-gray-800 pb-3 transition-colors duration-300">
-                    <button onClick={() => confirmDelete('goal', goal.id)} className="absolute top-0 right-0 text-red-500/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-[#0a0a0a] pl-2"><Trash2 className="w-3.5 h-3.5" /></button>
-                    <div className="flex justify-between items-center mb-1">
-                      <p className="text-sm font-serif font-bold text-black dark:text-white capitalize pr-6 transition-colors duration-300">{goal.name}</p>
-                      <p className="text-xs font-bold text-gray-800 dark:text-gray-300 transition-colors duration-300">{percentage.toFixed(0)}%</p>
+          {/* TAB 3: TARGETS */}
+          {activeTab === 'Targets' && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-200">
+              <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
+                <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Financial Targets</h3>
+                <button onClick={() => setGoalDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300">Add Target</button>
+              </div>
+              <div className="space-y-4">
+                {goals.length > 0 ? goals.map(goal => {
+                  const percentage = Math.min((toNumber(goal.current_amount) / toNumber(goal.target_amount)) * 100, 100);
+                  return (
+                    <div key={goal.id} className="group relative border-b border-gray-200 dark:border-gray-800 pb-3 transition-colors duration-300">
+                      <button onClick={() => confirmDelete('goal', goal.id)} className="absolute top-0 right-0 text-red-500/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-[#0a0a0a] pl-2"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <div className="flex justify-between items-center mb-1">
+                        <p className="text-sm font-serif font-bold text-black dark:text-white capitalize pr-6 transition-colors duration-300">{goal.name}</p>
+                        <p className="text-xs font-bold text-gray-800 dark:text-gray-300 transition-colors duration-300">{percentage.toFixed(0)}%</p>
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide transition-colors duration-300">{formatCurrency(toNumber(goal.current_amount))} of {formatCurrency(toNumber(goal.target_amount))}</p>
+                      <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden transition-colors duration-300">
+                        <div className="h-full bg-black dark:bg-white transition-all duration-1000" style={{ width: `${percentage}%` }}></div>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide transition-colors duration-300">{formatCurrency(toNumber(goal.current_amount))} of {formatCurrency(toNumber(goal.target_amount))}</p>
-                    <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden transition-colors duration-300">
-                      <div className="h-full bg-black dark:bg-white transition-all duration-1000" style={{ width: `${percentage}%` }}></div>
-                    </div>
-                  </div>
-                )
-              }) : (<p className="text-sm text-gray-500 italic">No targets set.</p>)}
+                  )
+                }) : (<p className="text-sm text-gray-500 italic">No targets set.</p>)}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* TRANSACTION FEED */}
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300">
+          {/* TRANSACTION FEED (ALWAYS VISIBLE) */}
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300 pt-6">
             <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
               <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Latest Transactions</h3>
               {isFilterActive && (<button className="text-[10px] font-bold text-gray-500 hover:text-black dark:hover:text-white uppercase transition-colors duration-300" onClick={() => setTxFilter({ type: 'all', accountId: 'all' })}>Clear Filter</button>)}
@@ -424,7 +462,7 @@ export default function Dashboard() {
            </Button>
         </div>
 
-        {/* AI CHAT MODAL - DENGAN TEXTAREA MULTILINE */}
+        {/* AI CHAT MODAL */}
         {showAIAssistant && (
           <>
             <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => setShowAIAssistant(false)}></div>
@@ -485,6 +523,28 @@ export default function Dashboard() {
             </div>
           </>
         )}
+
+        {/* MODAL EDIT SALDO */}
+        <Dialog open={editBalanceOpen} onOpenChange={setEditBalanceOpen}>
+          <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none p-6 shadow-xl transition-colors duration-300">
+            <div className="space-y-4">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-serif font-black text-black dark:text-white border-b border-black dark:border-white pb-3 transition-colors duration-300">Edit Balance</DialogTitle>
+                <DialogDescription className="text-sm text-gray-600 dark:text-gray-400 pt-3 font-medium transition-colors duration-300">
+                  Update the balance for {selectedAccount?.name}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">New Amount (IDR)</label>
+                <Input type="number" value={newBalanceAmount} onChange={(e) => setNewBalanceAmount(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300" />
+              </div>
+              <div className="flex gap-3 w-full pt-4">
+                <Button variant="outline" className="flex-1 rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors duration-300" onClick={() => setEditBalanceOpen(false)}>Cancel</Button>
+                <Button onClick={handleUpdateBalance} className="flex-1 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors duration-300">Update</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* POP-UP KONFIRMASI HAPUS */}
         <Dialog open={deleteConfirm.isOpen} onOpenChange={(isOpen) => setDeleteConfirm(prev => ({ ...prev, isOpen }))}>

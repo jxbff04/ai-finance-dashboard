@@ -131,7 +131,7 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
             <div className="flex justify-end">
               <Button size="sm" onClick={handleAutoFill} disabled={isLoadingAI} className="bg-blue-600 hover:bg-blue-700 text-white rounded-none border-0 uppercase font-bold text-[10px] tracking-wide h-7">
                 {isLoadingAI ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Sparkles className="w-3 h-3 mr-2" />}
-                {isLoadingAI ? 'Processing...' : 'AI Auto-Fill'}
+                {isLoadingAI ? 'Processing...' : 'AI AUTO-FILL'}
               </Button>
             </div>
           </div>
@@ -169,7 +169,7 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block transition-colors duration-300">Amount (IDR)</label>
-            <Input type="number" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 placeholder:text-gray-400 focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white rounded-none transition-colors duration-300" />
+            <Input type="number" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} className="[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 placeholder:text-gray-400 focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white rounded-none transition-colors duration-300" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
