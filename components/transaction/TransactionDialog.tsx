@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, Calendar as CalendarIcon } from 'lucide-react';
+import { Sparkles, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,7 @@ interface TransactionDialogProps {
 export default function TransactionDialog({ open, onOpenChange, initialType, accounts, onSubmitted }: TransactionDialogProps) {
   const [type, setType] = useState(initialType);
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState<Date | undefined>(new Date()); // Menggunakan Date object untuk Kalender
+  const [date, setDate] = useState<Date | undefined>(new Date());
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [notes, setNotes] = useState('');
@@ -40,7 +40,7 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
     if (open) {
       setType(initialType);
       setAmount(''); setNotes(''); setAiPrompt(''); setAccountId(''); setCategoryId('');
-      setDate(new Date()); // Reset ke hari ini saat modal dibuka
+      setDate(new Date());
       fetchCategories();
     }
   }, [open, initialType]);
@@ -66,10 +66,7 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
       setAmount(String(data.amount));
       setNotes(data.notes);
       
-      // Parsing tanggal dari string (YYYY-MM-DD) yang dikirim AI menjadi Date Object
-      if (data.date) {
-        setDate(new Date(data.date));
-      }
+      if (data.date) { setDate(new Date(data.date)); }
 
       if (data.account_name) {
         const matchedAcc = accounts.find(a => a.name.toLowerCase().includes(data.account_name.toLowerCase()));
@@ -80,16 +77,16 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
         if (matchedCat) setCategoryId(String(matchedCat.id));
       }
       
-      toast.success('Berhasil diisi otomatis!');
+      toast.success('Auto-filled successfully.');
     } catch (err: any) {
-      toast.error(err.message || 'Gagal auto-fill');
+      toast.error(err.message || 'Auto-fill failed.');
     } finally {
       setIsLoadingAI(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (!amount || !accountId || !date) return toast.error('Nominal, Akun, dan Tanggal wajib diisi');
+    if (!amount || !accountId || !date) return toast.error('Amount, Account, and Date are required.');
     setIsSubmitting(true);
     try {
       const finalAmount = type === 'expense' ? -Math.abs(Number(amount)) : Math.abs(Number(amount));
@@ -100,14 +97,14 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
         amount: finalAmount,
         type,
         notes,
-        transaction_date: format(date, 'yyyy-MM-dd') // Kembalikan ke format database
+        transaction_date: format(date, 'yyyy-MM-dd')
       });
       if (error) throw error;
-      toast.success('Transaksi berhasil disimpan');
+      toast.success('Transaction logged.');
       onSubmitted();
       onOpenChange(false);
     } catch (err: any) {
-      toast.error(err.message || 'Gagal menyimpan transaksi');
+      toast.error(err.message || 'Failed to log transaction.');
     } finally {
       setIsSubmitting(false);
     }
@@ -115,97 +112,87 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] bg-[#0A0A0A] border-gray-800 text-white">
+      <DialogContent className="sm:max-w-[425px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none shadow-2xl transition-colors duration-300">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Tambah {type === 'income' ? 'Pemasukan' : 'Pengeluaran'}</DialogTitle>
+          <DialogTitle className="text-2xl font-serif font-black border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">
+            New Entry
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 pt-4">
-          <div className="space-y-2 bg-[#141414] p-3 rounded-xl border border-gray-800">
+        <div className="space-y-5 pt-2">
+          
+          <div className="space-y-2 bg-gray-50 dark:bg-[#111] p-3 border border-gray-200 dark:border-gray-800 transition-colors duration-300">
             <Textarea 
-              placeholder="Contoh: Beli makan siang 45 ribu pakai Gopay" 
+              placeholder="e.g. Bought lunch for 45k using Gopay..." 
               value={aiPrompt} 
               onChange={(e) => setAiPrompt(e.target.value)}
-              className="resize-none bg-[#1c1c1c] text-white border-gray-700 placeholder:text-gray-500"
+              className="resize-none bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-300 dark:border-gray-700 placeholder:text-gray-400 dark:placeholder:text-gray-600 rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white font-serif transition-colors duration-300"
             />
             <div className="flex justify-end">
-              <Button size="sm" onClick={handleAutoFill} disabled={isLoadingAI} className="bg-cyan-600 hover:bg-cyan-500 text-white">
-                <Sparkles className="w-4 h-4 mr-2" />
-                {isLoadingAI ? 'Memproses...' : 'Isi Otomatis dengan AI'}
+              <Button size="sm" onClick={handleAutoFill} disabled={isLoadingAI} className="bg-blue-600 hover:bg-blue-700 text-white rounded-none border-0 uppercase font-bold text-[10px] tracking-wide h-7">
+                {isLoadingAI ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Sparkles className="w-3 h-3 mr-2" />}
+                {isLoadingAI ? 'Processing...' : 'AI Auto-Fill'}
               </Button>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-400 mb-1 block">Tipe</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block transition-colors duration-300">Type</label>
               <Select value={type} onValueChange={(v: any) => setType(v)}>
-                <SelectTrigger className="bg-[#141414] text-white border-gray-700 focus:ring-cyan-500">
+                <SelectTrigger className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 rounded-none focus:ring-0 focus:border-black dark:focus:border-white transition-colors duration-300">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1c1c1c] text-white border-gray-800">
-                  <SelectItem value="expense">Pengeluaran</SelectItem>
-                  <SelectItem value="income">Pemasukan</SelectItem>
+                <SelectContent className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-200 dark:border-gray-800 rounded-none">
+                  <SelectItem value="expense">Expense</SelectItem>
+                  <SelectItem value="income">Income</SelectItem>
                   <SelectItem value="transfer">Transfer</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
-            {/* INI ADALAH KALENDER MODERN YANG BARU */}
-            <div className="space-y-1 flex flex-col">
-              <label className="text-xs font-semibold text-gray-400 mb-1">Tanggal</label>
+            <div className="space-y-1.5 flex flex-col">
+              <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block transition-colors duration-300">Date</label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal bg-[#141414] border-gray-700 hover:bg-[#1c1c1c] hover:text-white transition-all focus-visible:ring-cyan-500",
-                      !date && "text-gray-500"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-cyan-500 shrink-0" />
-                    {date ? format(date, "d MMM yyyy", { locale: idLocale }) : <span>Pilih tanggal</span>}
+                  <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white rounded-none hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors duration-300", !date && "text-gray-500")}>
+                    <CalendarIcon className="mr-2 h-4 w-4 text-gray-500 shrink-0" />
+                    {date ? format(date, "d MMM yyyy", { locale: idLocale }) : <span>Select date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-[#0A0A0A] border-gray-800 text-white shadow-2xl" align="center">
-                  <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    initialFocus
-                    className="bg-[#0A0A0A] text-white rounded-lg border border-gray-800"
-                  />
+                <PopoverContent className="w-auto p-0 bg-white dark:bg-[#0a0a0a] border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none shadow-xl transition-colors duration-300" align="center">
+                  <Calendar mode="single" selected={date} onSelect={setDate} initialFocus className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white" />
                 </PopoverContent>
               </Popover>
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-400 block mb-1">Nominal</label>
-            <Input type="number" placeholder="45000" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-[#141414] text-white border-gray-700 placeholder:text-gray-500 focus-visible:ring-cyan-500" />
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block transition-colors duration-300">Amount (IDR)</label>
+            <Input type="number" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 placeholder:text-gray-400 focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white rounded-none transition-colors duration-300" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-400 block mb-1">Akun Sumber</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block transition-colors duration-300">Account</label>
               <Select value={accountId} onValueChange={setAccountId}>
-                <SelectTrigger className="bg-[#141414] text-white border-gray-700 focus:ring-cyan-500">
-                  <SelectValue placeholder="Pilih akun" />
+                <SelectTrigger className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 rounded-none focus:ring-0 focus:border-black dark:focus:border-white transition-colors duration-300">
+                  <SelectValue placeholder="Select..." />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1c1c1c] text-white border-gray-800">
+                <SelectContent className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-200 dark:border-gray-800 rounded-none max-h-48">
                   {accounts.map(acc => (
                     <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-400 block mb-1">Kategori</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block transition-colors duration-300">Category</label>
               <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger className="bg-[#141414] text-white border-gray-700 focus:ring-cyan-500">
-                  <SelectValue placeholder="Pilih kategori" />
+                <SelectTrigger className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 rounded-none focus:ring-0 focus:border-black dark:focus:border-white transition-colors duration-300">
+                  <SelectValue placeholder="Select..." />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1c1c1c] text-white border-gray-800 max-h-48">
+                <SelectContent className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-200 dark:border-gray-800 rounded-none max-h-48">
                   {categories.map(cat => (
                     <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
                   ))}
@@ -214,16 +201,16 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-400 block mb-1">Catatan</label>
-            <Input placeholder="Beli makan siang" value={notes} onChange={(e) => setNotes(e.target.value)} className="bg-[#141414] text-white border-gray-700 placeholder:text-gray-500 focus-visible:ring-cyan-500" />
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block transition-colors duration-300">Notes</label>
+            <Input placeholder="Lunch, Coffee, etc." value={notes} onChange={(e) => setNotes(e.target.value)} className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 placeholder:text-gray-400 focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white rounded-none transition-colors duration-300" />
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-gray-400 hover:text-white hover:bg-gray-800">Batal</Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-500 text-white">
-            {isSubmitting ? 'Menyimpan...' : 'Simpan Transaksi'}
+        <div className="flex justify-end gap-3 mt-2 border-t border-gray-200 dark:border-gray-800 pt-5 transition-colors duration-300">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-gray-300 font-bold hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors duration-300">Cancel</Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting} className="rounded-none bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 font-bold transition-colors duration-300">
+            {isSubmitting ? 'Saving...' : 'Log Transaction'}
           </Button>
         </div>
       </DialogContent>
