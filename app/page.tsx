@@ -612,7 +612,7 @@ export default function Dashboard() {
                   return (
                     <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed transition-colors duration-300 ${m.role === 'user' ? 'bg-black dark:bg-white text-white dark:text-black rounded-none' : 'bg-gray-100 dark:bg-[#111] text-black dark:text-gray-200 border border-gray-200 dark:border-gray-800 rounded-none font-serif'}`}>
-                        {text && <p className="whitespace-pre-wrap">{renderBoldMarkdown(text, m.role as 'user' | 'assistant')}</p>}
+                      {text && <p className="whitespace-pre-wrap">{renderBoldMarkdown(text)}</p>}
                         {hasTool && mAny.toolInvocations?.map((tool: any) => (
                           <div key={tool.toolCallId} className="mt-3 flex flex-col gap-1 border-t border-gray-300 dark:border-gray-700 pt-3 transition-colors duration-300">
                             {tool.state === 'result' ? (<span className="text-green-700 dark:text-green-500 font-bold text-[10px] uppercase flex items-center gap-1">✓ Database Synced</span>) : (<span className="text-blue-600 dark:text-blue-400 font-bold text-[10px] uppercase flex items-center gap-2 animate-pulse"><Loader2 className="w-3 h-3 animate-spin"/> Executing...</span>)}
