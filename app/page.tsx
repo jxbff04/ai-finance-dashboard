@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import {
-  TrendingUp, TrendingDown, Plus, ArrowRightLeft, Building2, Banknote, Smartphone, Coins, Calendar as CalendarIcon, Download, Filter, Trash2, MessageSquare, AlertTriangle, Loader2, Moon, Sun, Pencil
+  TrendingUp, TrendingDown, Trash2, MessageSquare, Loader2, Moon, Sun, Pencil, RefreshCw, PlusCircle, Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,25 +20,27 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
 interface Account { id: string; name: string; type: string; balance: string | number | null; currency?: string; }
 interface Transaction { id: string; account_id: string; transaction_date: string; notes: string; category: string; amount: number | string; type: 'income' | 'expense' | 'transfer'; accounts: { name: string; }; }
 interface Budget { id: string; category_name: string; amount: number; month: string; }
 interface Goal { id: string; name: string; target_amount: number; current_amount: number; deadline: string; }
+interface InvestmentAsset { id: string; symbol: string; units: number; }
+
 type TxFilter = { type: 'all' | 'income' | 'expense' | 'transfer'; accountId: 'all' | string; };
-type ActiveTab = 'Portfolios' | 'Budgets' | 'Targets';
+type ActiveTab = 'Portfolios' | 'Budgets' | 'Targets' | 'Assets';
 
-const PIE_COLORS = ['#000000', '#333333', '#666666', '#999999', '#cccccc', '#0f172a', '#334155'];
+const PIE_COLORS = ['#333333', '#666666', '#999999', '#cccccc', '#f5f5f5', '#1a1a1a'];
 
-function renderBoldMarkdown(text: string, variant: 'user' | 'assistant'): ReactNode[] {
-  const strongClass = 'font-bold';
-  const re = /\*\*([\s\S]+?)\*\*/g;
-  const nodes: ReactNode[] = [];
-  let last = 0; let m: RegExpExecArray | null; let k = 0;
+// CSS Hack class untuk menghilangkan panah input number
+const NO_SPINNER_CLASS = "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]";
+
+function renderBoldMarkdown(text: string): ReactNode[] {
+  const re = /\*\*([\s\S]+?)\*\*/g; const nodes: ReactNode[] = []; let last = 0; let m; let k = 0;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) nodes.push(<span key={`t-${k++}`}>{text.slice(last, m.index)}</span>);
-    nodes.push(<strong key={`b-${k++}`} className={strongClass}>{m[1]}</strong>);
+    nodes.push(<strong key={`b-${k++}`} className="font-bold">{m[1]}</strong>);
     last = m.index + m[0].length;
   }
   if (last < text.length) nodes.push(<span key={`t-${k++}`}>{text.slice(last)}</span>);
@@ -57,11 +59,6 @@ const withTimeout = async <T,>(promise: any, ms: number): Promise<T> => {
     const timeoutPromise = new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error(`Request timeout after ${ms}ms`)), ms); });
     return await Promise.race([Promise.resolve(promise) as Promise<T>, timeoutPromise]);
   } finally { if (timer) clearTimeout(timer); }
-};
-
-const getAccountIcon = (type: string) => {
-  const t = type.toUpperCase();
-  if (t.includes('BANK')) return Building2; if (t.includes('CASH')) return Banknote; if (t.includes('E-WALLET') || t.includes('WALLET')) return Smartphone; if (t.includes('GOLD')) return Coins; return Banknote;
 };
 
 const getMessageText = (message: any) => {
@@ -106,7 +103,7 @@ const formatDateForGrouping = (dateString: string): string => {
 
 export default function Dashboard() {
   const [showAIAssistant, setShowAIAssistant] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default to dark for Blackjack style
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>('Portfolios');
   
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -114,6 +111,16 @@ export default function Dashboard() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // States untuk Assets
+  const [myAssets, setMyAssets] = useState<InvestmentAsset[]>([]);
+  const [assetPrices, setAssetPrices] = useState<Record<string, number>>({});
+  const [assetDialogOpen, setAssetDialogOpen] = useState(false);
+  const [editAssetOpen, setEditAssetOpen] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<InvestmentAsset | null>(null);
+  const [assetSymbol, setAssetSymbol] = useState('');
+  const [assetUnits, setAssetUnits] = useState('');
   
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
   const [transactionDialogInitialType, setTransactionDialogInitialType] = useState<Transaction['type']>('expense');
@@ -128,10 +135,12 @@ export default function Dashboard() {
   const [newGoalDeadline, setNewGoalDeadline] = useState<Date>();
 
   const [editBalanceOpen, setEditBalanceOpen] = useState(false);
+  const [fundGoalOpen, setFundGoalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
-  const [newBalanceAmount, setNewBalanceAmount] = useState('');
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [inputValue, setInputValue] = useState('');
 
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; type: 'transaction' | 'budget' | 'goal' | null; id: string | null }>({ isOpen: false, type: null, id: null });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; type: 'transaction' | 'budget' | 'goal' | 'asset' | null; id: string | null }>({ isOpen: false, type: null, id: null });
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [input, setInput] = useState('');
@@ -145,8 +154,33 @@ export default function Dashboard() {
     else { document.documentElement.classList.remove('dark'); }
   }, [isDarkMode]);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  // Load Assets dari Local Storage
+  useEffect(() => {
+    const savedAssets = localStorage.getItem('blackjack_assets');
+    if (savedAssets) setMyAssets(JSON.parse(savedAssets));
+  }, []);
+
+  // Polling Harga API
+  const fetchPrices = useCallback(async () => {
+    if (myAssets.length === 0) return;
+    try {
+      const symbols = myAssets.map(a => a.symbol).join(',');
+      const res = await fetch(`/api/prices?symbols=${symbols}`);
+      const data = await res.json();
+      setAssetPrices(data);
+    } catch (e) { console.error('Failed to fetch prices'); }
+  }, [myAssets]);
+
+  useEffect(() => {
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 15000); // Sinkronisasi setiap 15 detik
+    return () => clearInterval(interval);
+  }, [fetchPrices]);
+
+  const fetchData = useCallback(async (showSpin = true) => {
+    if(showSpin) setLoading(true);
+    setIsRefreshing(true);
+    fetchPrices();
     try {
       let accountsById = new Map<string, string>();
       const accountsRes = await withTimeout<any>(supabase.from('accounts').select('*').order('name', { ascending: true }), 15000);
@@ -172,34 +206,67 @@ export default function Dashboard() {
       const goalsRes = await supabase.from('goals').select('*').order('created_at', { ascending: false });
       if (goalsRes.data) setGoals(goalsRes.data);
 
-    } catch (err) { console.error(err); toast.error('Failed to load data'); } finally { setLoading(false); }
-  }, [selectedMonth]);
+    } catch (err) { console.error(err); toast.error('Failed to load data'); } 
+    finally { setLoading(false); setTimeout(() => setIsRefreshing(false), 500); }
+  }, [selectedMonth, fetchPrices]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // LOGIC ACTIONS
   const handleUpdateBalance = async () => {
-    if (!selectedAccount || newBalanceAmount === '') return toast.error('Amount is required');
+    if (!selectedAccount || inputValue === '') return toast.error('Amount is required');
     try {
-      const { error } = await supabase.from('accounts').update({ balance: Number(newBalanceAmount) }).eq('id', selectedAccount.id);
+      const { error } = await supabase.from('accounts').update({ balance: Number(inputValue) }).eq('id', selectedAccount.id);
       if (error) throw error;
-      toast.success(`Balance updated for ${selectedAccount.name}`);
-      setEditBalanceOpen(false);
-      fetchData();
+      toast.success(`Balance updated`); setEditBalanceOpen(false); fetchData(false);
     } catch (err) { toast.error('Failed to update balance'); }
   };
 
-  const confirmDelete = (type: 'transaction' | 'budget' | 'goal', id: string) => { setDeleteConfirm({ isOpen: true, type, id }); };
+  const handleFundGoal = async () => {
+    if (!selectedGoal || inputValue === '') return toast.error('Amount is required');
+    try {
+      const newAmt = Number(selectedGoal.current_amount) + Number(inputValue);
+      const { error } = await supabase.from('goals').update({ current_amount: newAmt }).eq('id', selectedGoal.id);
+      if (error) throw error;
+      toast.success('Funds added successfully'); setFundGoalOpen(false); fetchData(false);
+    } catch (err) { toast.error('Failed to add funds'); }
+  };
+
+  const handleAddAsset = () => {
+    if (!assetSymbol || !assetUnits) return toast.error('Fill all fields');
+    const newAsset = { id: Date.now().toString(), symbol: assetSymbol.toUpperCase(), units: Number(assetUnits) };
+    const updatedAssets = [...myAssets, newAsset];
+    setMyAssets(updatedAssets);
+    localStorage.setItem('blackjack_assets', JSON.stringify(updatedAssets));
+    setAssetDialogOpen(false); setAssetSymbol(''); setAssetUnits(''); toast.success('Asset tracked!');
+    fetchPrices();
+  };
+
+  const handleEditAsset = () => {
+    if (!selectedAsset || !assetUnits) return toast.error('Units are required');
+    const updatedAssets = myAssets.map(a => a.id === selectedAsset.id ? { ...a, symbol: assetSymbol.toUpperCase(), units: Number(assetUnits) } : a);
+    setMyAssets(updatedAssets);
+    localStorage.setItem('blackjack_assets', JSON.stringify(updatedAssets));
+    setEditAssetOpen(false); setSelectedAsset(null); toast.success('Asset updated!');
+    fetchPrices();
+  };
+
+  const confirmDelete = (type: 'transaction' | 'budget' | 'goal' | 'asset', id: string) => { setDeleteConfirm({ isOpen: true, type, id }); };
+  
   const executeDelete = async () => {
     const { type, id } = deleteConfirm;
     if (!type || !id) return;
     setIsDeleting(true);
     try {
-      let tableName = type === 'transaction' ? 'transactions' : type === 'budget' ? 'budgets' : 'goals';
-      const { error } = await supabase.from(tableName).delete().eq('id', id);
-      if (error) throw error;
-      toast.success('Data deleted successfully');
-      fetchData();
-    } catch (err) { toast.error('Failed to delete data'); } 
+      if (type === 'asset') {
+        const updated = myAssets.filter(a => a.id !== id);
+        setMyAssets(updated); localStorage.setItem('blackjack_assets', JSON.stringify(updated));
+      } else {
+        const { error } = await supabase.from(type === 'transaction' ? 'transactions' : type === 'budget' ? 'budgets' : 'goals').delete().eq('id', id);
+        if (error) throw error;
+      }
+      toast.success('Data deleted'); fetchData(false);
+    } catch (err) { toast.error('Deletion failed'); } 
     finally { setIsDeleting(false); setDeleteConfirm({ isOpen: false, type: null, id: null }); }
   };
 
@@ -208,7 +275,7 @@ export default function Dashboard() {
     try {
       const { error } = await supabase.from('budgets').insert({ category_name: newBudgetCategory, amount: Math.abs(Number(newBudgetAmount)), month: selectedMonth });
       if (error) throw error;
-      toast.success('Budget added'); setBudgetDialogOpen(false); fetchData();
+      toast.success('Budget added'); setBudgetDialogOpen(false); fetchData(false);
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -217,22 +284,16 @@ export default function Dashboard() {
     try {
       const { error } = await supabase.from('goals').insert({ name: newGoalName, target_amount: Math.abs(Number(newGoalTarget)), deadline: newGoalDeadline ? format(newGoalDeadline, 'yyyy-MM-dd') : null });
       if (error) throw error;
-      toast.success('Goal created'); setGoalDialogOpen(false); setNewGoalDeadline(undefined); fetchData();
+      toast.success('Goal created'); setGoalDialogOpen(false); setNewGoalDeadline(undefined); fetchData(false);
     } catch (err: any) { toast.error(err.message); }
   };
 
+  // CALCULATIONS
   const formatCurrency = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'decimal', minimumFractionDigits: 0 }).format(amount);
-  const totalNetWorth = accounts.reduce((sum, a) => sum + toNumber(a.balance), 0);
-
-  const accountContextRef = useRef('');
-  accountContextRef.current = [`Total balance: ${formatCurrency(totalNetWorth)}`, `Accounts: ${accounts.length}`, accounts.map(a => `- ${a.name}: ${formatCurrency(toNumber(a.balance))}`).join('\n')].join('\n');
-  const chatTransport = useMemo(() => new DefaultChatTransport({ api: '/api/chat', body: () => ({ accountContext: accountContextRef.current }) }), []);
-  const { messages: chatMessages, sendMessage, status: chatStatus, setMessages: setChatMessages } = useChat({ id: 'finance-chat', transport: chatTransport });
-  const chatBusy = chatStatus === 'streaming' || chatStatus === 'submitted';
-  const chatScrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }, [chatMessages, chatStatus]);
-  useEffect(() => { if (showAIAssistant && chatMessages.length === 0) setChatMessages([{ id: 'w', role: 'assistant', parts: [{ type: 'text', text: 'Good day. I am ready to process your transaction records.' }] }]); }, [showAIAssistant, chatMessages.length, setChatMessages]);
+  
+  const totalLiquidNetWorth = accounts.reduce((sum, a) => sum + toNumber(a.balance), 0);
+  const totalInvestments = myAssets.reduce((sum, a) => sum + (a.units * (assetPrices[a.symbol] || 0)), 0);
+  const grandTotalAssets = totalLiquidNetWorth + totalInvestments;
 
   const transactionsInSelectedMonth = useMemo(() => transactions.filter(t => transactionInYearMonth(t, selectedMonth)), [transactions, selectedMonth]);
   const monthlyIncome = useMemo(() => transactionsInSelectedMonth.filter(t => t.type === 'income').reduce((s, t) => s + toNumber(t.amount), 0), [transactionsInSelectedMonth]);
@@ -262,18 +323,22 @@ export default function Dashboard() {
     return Object.entries(grouped).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value); 
   }, [transactionsInSelectedMonth]);
 
+  const assetChartData = useMemo(() => {
+    return myAssets.map(a => ({ name: a.symbol, value: a.units * (assetPrices[a.symbol] || 0) })).filter(a => a.value > 0).sort((a, b) => b.value - a.value);
+  }, [myAssets, assetPrices]);
+
+  const chatTransport = useMemo(() => new DefaultChatTransport({ api: '/api/chat', body: () => ({ accountContext: `Liquid Balance: ${totalLiquidNetWorth}, Investments: ${totalInvestments}` }) }), [totalLiquidNetWorth, totalInvestments]);
+  const { messages: chatMessages, sendMessage, status: chatStatus, setMessages: setChatMessages } = useChat({ id: 'finance-chat', transport: chatTransport });
+  const chatBusy = chatStatus === 'streaming' || chatStatus === 'submitted';
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { chatScrollRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, chatStatus, showAIAssistant]);
+  
   if (loading) return <div className="min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center"><Loader2 className="h-6 w-6 text-black dark:text-white animate-spin" /></div>;
 
   return (
     <div className="min-h-screen bg-[#f3f4f6] dark:bg-[#050505] flex justify-center text-black dark:text-gray-100 font-sans transition-colors duration-300 selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black">
       
-      {/* Global Style to Hide Input Number Spinners */}
-      <style dangerouslySetInnerHTML={{__html: `
-        input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type="number"] { -moz-appearance: textfield; }
-      `}} />
-
       <div className="w-full max-w-md bg-white dark:bg-[#0a0a0a] min-h-screen relative flex flex-col border-x border-gray-300 dark:border-gray-800 overflow-x-hidden shadow-sm transition-colors duration-300">
         
         {/* HEADER */}
@@ -282,39 +347,42 @@ export default function Dashboard() {
             <h1 className="text-3xl font-sans font-bold tracking-tighter text-white leading-none">
               Blackjack
             </h1>
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-3 items-center">
+              <button onClick={() => fetchData(false)} className={cn("p-1.5 rounded-full text-white hover:bg-gray-800 transition-all", isRefreshing && "animate-spin")}>
+                <RefreshCw className="w-4 h-4" />
+              </button>
               <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1.5 rounded-full text-white hover:bg-gray-800 transition-colors">
                 {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
-              <Button variant="outline" size="sm" onClick={() => downloadTransactionsCsv(filteredTransactions, selectedMonth)} className="h-7 bg-transparent border-white text-white text-[10px] font-bold rounded-none hover:bg-white hover:text-black uppercase transition-colors hidden sm:flex">
-                <Download className="w-3 h-3 mr-1" /> CSV
-              </Button>
               <Button size="sm" onClick={() => { setTransactionDialogInitialType('expense'); setTransactionDialogOpen(true); }} className="h-7 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-none border-0 uppercase transition-colors">
                 + New Entry
               </Button>
             </div>
           </div>
           
-          {/* TICKER TAPE BAR */}
+          {/* TICKER TAPE BAR - TOTAL ASSETS */}
           <div className="bg-white dark:bg-[#050505] border-b border-gray-300 dark:border-gray-800 px-5 py-2 flex items-center overflow-x-auto scrollbar-hide gap-3 shadow-sm transition-colors duration-300">
              <div className="flex gap-2 shrink-0 items-center">
-               <span className="bg-black dark:bg-white dark:text-black text-white px-2 py-0.5 text-[10px] font-bold transition-colors duration-300">NET WORTH</span>
-               <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(totalNetWorth)}</span>
+               <span className="bg-black dark:bg-white dark:text-black text-white px-2 py-0.5 text-[10px] font-bold transition-colors duration-300">TOTAL ASSETS</span>
+               <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(grandTotalAssets)}</span>
              </div>
-             <div className="flex gap-2 shrink-0 items-center ml-2">
+             <div className="flex gap-2 shrink-0 items-center ml-1">
+               <span className="bg-blue-600 text-white px-2 py-0.5 text-[10px] font-bold transition-colors duration-300">INVESTMENTS</span>
+               <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(totalInvestments)}</span>
+             </div>
+             <div className="flex gap-2 shrink-0 items-center ml-1">
                <span className="bg-green-600 text-white px-2 py-0.5 text-[10px] font-bold flex items-center">INFLOW <TrendingUp className="w-3 h-3 ml-1" /></span>
                <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(monthlyIncome)}</span>
              </div>
-             <div className="flex gap-2 shrink-0 items-center ml-2">
+             <div className="flex gap-2 shrink-0 items-center ml-1">
                <span className="bg-[#cc0000] text-white px-2 py-0.5 text-[10px] font-bold flex items-center">OUTFLOW <TrendingDown className="w-3 h-3 ml-1" /></span>
                <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300 pr-4">{formatCurrency(monthlyExpense)}</span>
              </div>
           </div>
 
-          {/* SECONDARY NAV / FILTER */}
           <div className="bg-white dark:bg-[#050505] px-5 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-800 transition-colors duration-300">
-            <div className="flex gap-4 text-xs font-medium text-gray-800 dark:text-gray-400">
-              <span className="cursor-pointer hover:text-black dark:hover:text-white border-b border-black dark:border-white pb-1 transition-colors duration-300">Overview</span>
+            <div className="flex gap-4 text-xs font-medium text-gray-800 dark:text-gray-400 uppercase tracking-wider">
+              Terminal Overview
             </div>
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
               <SelectTrigger className="h-6 w-auto border-0 shadow-none bg-transparent text-xs font-bold text-black dark:text-white p-0 focus:ring-0 focus:ring-offset-0 transition-colors duration-300">
@@ -331,15 +399,13 @@ export default function Dashboard() {
           
           <div className="border-b border-black dark:border-gray-700 pb-2 animate-in fade-in slide-in-from-bottom-2 duration-500 transition-colors duration-300">
              <h2 className="text-4xl font-serif font-black tracking-tight text-black dark:text-white mb-1 transition-colors duration-300">Markets</h2>
-             <div className="flex gap-5 text-xs font-medium text-gray-600 dark:text-gray-400 mt-4 transition-colors duration-300">
-               <span onClick={() => setActiveTab('Portfolios')} className={cn("cursor-pointer transition-colors duration-300", activeTab === 'Portfolios' ? "text-black dark:text-white font-bold" : "hover:text-black dark:hover:text-white")}>Portfolios</span>
-               <span onClick={() => setActiveTab('Budgets')} className={cn("cursor-pointer transition-colors duration-300", activeTab === 'Budgets' ? "text-black dark:text-white font-bold" : "hover:text-black dark:hover:text-white")}>Budgets</span>
-               <span onClick={() => setActiveTab('Targets')} className={cn("cursor-pointer transition-colors duration-300", activeTab === 'Targets' ? "text-black dark:text-white font-bold" : "hover:text-black dark:hover:text-white")}>Targets</span>
+             <div className="flex gap-5 text-xs font-medium text-gray-600 dark:text-gray-400 mt-4 transition-colors duration-300 overflow-x-auto pb-1">
+               {['Portfolios', 'Budgets', 'Targets', 'Assets'].map((tab) => (
+                 <span key={tab} onClick={() => setActiveTab(tab as ActiveTab)} className={cn("cursor-pointer pb-1 border-b-2 whitespace-nowrap uppercase transition-all duration-300", activeTab === tab ? "border-black dark:border-white text-black dark:text-white font-bold" : "border-transparent hover:text-black dark:hover:text-white")}>{tab}</span>
+               ))}
              </div>
           </div>
 
-          {/* DYNAMIC TAB CONTENT */}
-          
           {/* TAB 1: PORTFOLIOS */}
           {activeTab === 'Portfolios' && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100">
@@ -352,7 +418,7 @@ export default function Dashboard() {
                       <p className="text-sm font-serif font-bold text-black dark:text-white truncate leading-tight mb-2 transition-colors duration-300">{acc.name}</p>
                       <div className="flex justify-between items-center">
                         <p className="text-xs font-bold text-black dark:text-gray-200 transition-colors duration-300">{formatCurrency(toNumber(acc.balance))}</p>
-                        <button onClick={(e) => { e.stopPropagation(); setSelectedAccount(acc); setNewBalanceAmount(String(toNumber(acc.balance))); setEditBalanceOpen(true); }} className="text-gray-400 hover:text-blue-600 transition-colors">
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedAccount(acc); setInputValue(String(toNumber(acc.balance))); setEditBalanceOpen(true); }} className="text-gray-400 hover:text-blue-600 transition-colors">
                           <Pencil className="w-3 h-3" />
                         </button>
                       </div>
@@ -368,7 +434,7 @@ export default function Dashboard() {
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
               <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
                 <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Spending Limits</h3>
-                <button onClick={() => setBudgetDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300">Add Limit</button>
+                <button onClick={() => setBudgetDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300 uppercase">+ Add Limit</button>
               </div>
               <div className="space-y-4">
                 {budgets.length > 0 ? budgets.map(budget => {
@@ -397,19 +463,24 @@ export default function Dashboard() {
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-200">
               <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
                 <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Financial Targets</h3>
-                <button onClick={() => setGoalDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300">Add Target</button>
+                <button onClick={() => setGoalDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300 uppercase">+ New Target</button>
               </div>
               <div className="space-y-4">
                 {goals.length > 0 ? goals.map(goal => {
                   const percentage = Math.min((toNumber(goal.current_amount) / toNumber(goal.target_amount)) * 100, 100);
                   return (
-                    <div key={goal.id} className="group relative border-b border-gray-200 dark:border-gray-800 pb-3 transition-colors duration-300">
-                      <button onClick={() => confirmDelete('goal', goal.id)} className="absolute top-0 right-0 text-red-500/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-[#0a0a0a] pl-2"><Trash2 className="w-3.5 h-3.5" /></button>
-                      <div className="flex justify-between items-center mb-1">
+                    <div key={goal.id} className="group relative border border-gray-200 dark:border-gray-800 p-3 transition-colors duration-300">
+                      <div className="flex justify-between items-center mb-2 border-b border-gray-100 dark:border-gray-800 pb-2">
                         <p className="text-sm font-serif font-bold text-black dark:text-white capitalize pr-6 transition-colors duration-300">{goal.name}</p>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => { setSelectedGoal(goal); setInputValue(''); setFundGoalOpen(true); }} className="text-gray-500 hover:text-blue-600 flex items-center gap-1 text-[10px] font-bold uppercase transition-colors"><PlusCircle className="w-3 h-3"/> Fund</button>
+                          <button onClick={() => confirmDelete('goal', goal.id)} className="text-red-500/50 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-end mb-1">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide transition-colors duration-300">{formatCurrency(toNumber(goal.current_amount))} of {formatCurrency(toNumber(goal.target_amount))}</p>
                         <p className="text-xs font-bold text-gray-800 dark:text-gray-300 transition-colors duration-300">{percentage.toFixed(0)}%</p>
                       </div>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide transition-colors duration-300">{formatCurrency(toNumber(goal.current_amount))} of {formatCurrency(toNumber(goal.target_amount))}</p>
                       <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden transition-colors duration-300">
                         <div className="h-full bg-black dark:bg-white transition-all duration-1000" style={{ width: `${percentage}%` }}></div>
                       </div>
@@ -420,62 +491,119 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TRANSACTION FEED (ALWAYS VISIBLE) */}
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300 pt-6">
-            <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
-              <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Latest Transactions</h3>
-              {isFilterActive && (<button className="text-[10px] font-bold text-gray-500 hover:text-black dark:hover:text-white uppercase transition-colors duration-300" onClick={() => setTxFilter({ type: 'all', accountId: 'all' })}>Clear Filter</button>)}
-            </div>
+          {/* TAB 4: ASSETS (Pie Chart + Real Time Tracking) */}
+          {activeTab === 'Assets' && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100">
+              <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
+                <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Investment Assets</h3>
+                <button onClick={() => setAssetDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300 uppercase">+ Add Asset</button>
+              </div>
 
-            <div className="space-y-6">
-              {groupedTransactions.map(([dateKey, txs]) => (
-                <div key={dateKey}>
-                  <h4 className="text-xs font-bold text-black dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-800 pb-1 transition-colors duration-300">{formatDateForGrouping(dateKey)}</h4>
+              {assetChartData.length > 0 ? (
+                <>
+                  <div className="h-[250px] w-full bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 p-4 mb-6 transition-colors duration-300">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={assetChartData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" stroke="none">
+                          {assetChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                        </Pie>
+                        <RechartsTooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ backgroundColor: isDarkMode ? '#0a0a0a' : '#fff', borderColor: isDarkMode ? '#333' : '#eee', borderRadius: '0', color: isDarkMode ? '#fff' : '#000', fontSize: '12px' }} />
+                        <Legend iconType="square" wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  
                   <div className="space-y-3">
-                    {txs.map((tx) => {
-                      const amt = toNumber(tx.amount); const isInc = tx.type === 'income';
+                    {myAssets.map(asset => {
+                      const price = assetPrices[asset.symbol] || 0;
+                      const value = asset.units * price;
                       return (
-                        <div key={tx.id} className="group flex items-start justify-between hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors -mx-2 px-2 py-1">
-                          <div className="min-w-0 flex-1 pr-3">
-                            <p className="text-sm font-serif font-bold text-black dark:text-white truncate transition-colors duration-300">{tx.notes || 'Unnamed Transaction'}</p>
-                            <p className="text-[10px] font-medium text-gray-500 uppercase mt-0.5">{tx.category} • {tx.accounts?.name}</p>
+                        <div key={asset.id} className="group flex justify-between items-center p-4 border border-gray-200 dark:border-gray-800 hover:border-black dark:hover:border-gray-500 transition-colors duration-300">
+                          <div className="flex items-center gap-3">
+                            <div className="flex flex-col gap-2">
+                               <button onClick={() => { setSelectedAsset(asset); setAssetSymbol(asset.symbol); setAssetUnits(String(asset.units)); setEditAssetOpen(true); }} className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"><Pencil className="w-3.5 h-3.5" /></button>
+                               <button onClick={() => confirmDelete('asset', asset.id)} className="text-red-500/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-black dark:text-white uppercase transition-colors duration-300">{asset.symbol}</p>
+                              <p className="text-[10px] text-gray-500 uppercase">{asset.units} Units @ {formatCurrency(price)}/unit</p>
+                            </div>
                           </div>
-                          <div className="flex flex-col items-end shrink-0">
-                            <p className={`font-sans text-sm font-bold transition-colors duration-300 ${isInc ? 'text-green-600 dark:text-green-500' : 'text-black dark:text-white'}`}>{isInc ? '+' : ''}{formatCurrency(amt)}</p>
-                            <button onClick={() => confirmDelete('transaction', tx.id)} className="text-[10px] font-bold text-[#cc0000] dark:text-red-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Remove</button>
+                          <div className="text-right">
+                            <p className="text-sm font-mono font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(value)}</p>
                           </div>
                         </div>
-                      );
+                      )
                     })}
+                    <p className="text-[9px] text-gray-500 text-center mt-4 uppercase tracking-widest">Pricing data sourced from Yahoo Finance API (Auto-Converted to IDR)</p>
                   </div>
-                </div>
-              ))}
-              {filteredTransactions.length === 0 && (<p className="text-sm text-gray-500 italic">No transactions found for this period.</p>)}
+                </>
+              ) : (
+                <p className="text-sm text-gray-500 italic text-center py-10">No assets tracked. Add your global stocks, crypto, or gold (e.g. BBCA.JK, AAPL, BTC-USD, GC=F) to monitor real-time values.</p>
+              )}
             </div>
-          </div>
+          )}
+
+          {/* TRANSACTION FEED (Sembunyikan saat di tab Assets agar fokus) */}
+          {activeTab !== 'Assets' && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300">
+              <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300 mt-10">
+                <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Latest Transactions</h3>
+                {isFilterActive && (<button className="text-[10px] font-bold text-gray-500 hover:text-black dark:hover:text-white uppercase transition-colors duration-300" onClick={() => setTxFilter({ type: 'all', accountId: 'all' })}>Clear Filter</button>)}
+              </div>
+
+              <div className="space-y-6">
+                {groupedTransactions.map(([dateKey, txs]) => (
+                  <div key={dateKey}>
+                    <h4 className="text-xs font-bold text-black dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-800 pb-1 transition-colors duration-300">{formatDateForGrouping(dateKey)}</h4>
+                    <div className="space-y-3">
+                      {txs.map((tx) => {
+                        const amt = toNumber(tx.amount); const isInc = tx.type === 'income';
+                        return (
+                          <div key={tx.id} className="group flex items-start justify-between hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors -mx-2 px-2 py-1">
+                            <div className="min-w-0 flex-1 pr-3">
+                              <p className="text-sm font-serif font-bold text-black dark:text-white truncate transition-colors duration-300">{tx.notes || 'Unnamed Transaction'}</p>
+                              <p className="text-[10px] font-medium text-gray-500 uppercase mt-0.5">{tx.category} • {tx.accounts?.name}</p>
+                            </div>
+                            <div className="flex flex-col items-end shrink-0">
+                              <p className={`font-sans text-sm font-bold transition-colors duration-300 ${isInc ? 'text-green-600 dark:text-green-500' : 'text-black dark:text-white'}`}>{isInc ? '+' : ''}{formatCurrency(amt)}</p>
+                              <button onClick={() => confirmDelete('transaction', tx.id)} className="text-[10px] font-bold text-[#cc0000] dark:text-red-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity uppercase">Delete</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {filteredTransactions.length === 0 && (<p className="text-sm text-gray-500 italic">No transactions found for this period.</p>)}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* BOTTOM FLOATING AI BUTTON */}
-        <div className="fixed bottom-6 right-1/2 translate-x-32 sm:translate-x-44 z-40">
-           <Button onClick={() => setShowAIAssistant(true)} className="h-14 w-14 rounded-full bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 shadow-2xl flex items-center justify-center border-2 border-white dark:border-gray-900 transition-colors duration-300">
+        {/* FLOATING AI BUTTON */}
+        <div className="fixed bottom-6 right-6 sm:right-auto sm:translate-x-44 z-40">
+           <Button onClick={() => setShowAIAssistant(true)} className="h-14 w-14 rounded-none bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 shadow-2xl border border-gray-700 dark:border-gray-200 transition-colors duration-300">
              <MessageSquare className="h-6 w-6" />
            </Button>
         </div>
 
-        {/* AI CHAT MODAL */}
+        {/* AI CHAT MODAL - FIXED FOCUS & AUTO-SCROLL (Masalah #2) */}
         {showAIAssistant && (
-          <>
-            <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => setShowAIAssistant(false)}></div>
-            <div className="absolute bottom-0 left-0 right-0 h-[85vh] z-50 bg-white dark:bg-[#0a0a0a] border-t border-gray-300 dark:border-gray-800 flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.3)] animate-in slide-in-from-bottom duration-300 transition-colors duration-300">
-              <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-black transition-colors duration-300">
+          <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-sm sm:p-4">
+            <div className="w-full max-w-md mx-auto h-[90dvh] sm:h-[85dvh] bg-white dark:bg-[#0a0a0a] border border-gray-300 dark:border-gray-800 flex flex-col shadow-2xl transition-colors duration-300">
+              
+              {/* Header Chat */}
+              <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center shrink-0 bg-gray-50 dark:bg-black transition-colors duration-300">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></div>
-                  <h3 className="text-sm font-serif font-bold text-black dark:text-white transition-colors duration-300">Financial Assistant</h3>
+                  <div className="w-2 h-2 bg-blue-600 animate-pulse"></div>
+                  <h3 className="text-sm font-serif font-bold text-black dark:text-white transition-colors duration-300 uppercase">BLACKJACK AI</h3>
                 </div>
-                <button onClick={() => setShowAIAssistant(false)} className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors duration-300">Close</button>
+                <button onClick={() => setShowAIAssistant(false)} className="text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors duration-300 uppercase">Close</button>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-white dark:bg-[#0a0a0a] transition-colors duration-300" ref={chatScrollRef}>
+              {/* Area Pesan Chat */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-white dark:bg-[#0a0a0a] transition-colors duration-300">
                 {chatMessages.map((m) => {
                   const text = getMessageText(m);
                   const mAny = m as any;
@@ -483,11 +611,11 @@ export default function Dashboard() {
                   if (!text && !hasTool) return null;
                   return (
                     <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed transition-colors duration-300 ${m.role === 'user' ? 'bg-black dark:bg-white text-white dark:text-black rounded-l-lg rounded-tr-lg' : 'bg-gray-100 dark:bg-[#111] text-black dark:text-gray-200 border border-gray-200 dark:border-gray-800 rounded-r-lg rounded-tl-lg font-serif'}`}>
+                      <div className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed transition-colors duration-300 ${m.role === 'user' ? 'bg-black dark:bg-white text-white dark:text-black rounded-none' : 'bg-gray-100 dark:bg-[#111] text-black dark:text-gray-200 border border-gray-200 dark:border-gray-800 rounded-none font-serif'}`}>
                         {text && <p className="whitespace-pre-wrap">{renderBoldMarkdown(text, m.role as 'user' | 'assistant')}</p>}
                         {hasTool && mAny.toolInvocations?.map((tool: any) => (
                           <div key={tool.toolCallId} className="mt-3 flex flex-col gap-1 border-t border-gray-300 dark:border-gray-700 pt-3 transition-colors duration-300">
-                            {tool.state === 'result' ? (<span className="text-green-700 dark:text-green-500 font-bold text-xs flex items-center gap-1">✓ Saved to Database</span>) : (<span className="text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center gap-2 animate-pulse"><Loader2 className="w-3 h-3 animate-spin"/> Processing Request...</span>)}
+                            {tool.state === 'result' ? (<span className="text-green-700 dark:text-green-500 font-bold text-[10px] uppercase flex items-center gap-1">✓ Database Synced</span>) : (<span className="text-blue-600 dark:text-blue-400 font-bold text-[10px] uppercase flex items-center gap-2 animate-pulse"><Loader2 className="w-3 h-3 animate-spin"/> Executing...</span>)}
                           </div>
                         ))}
                       </div>
@@ -496,16 +624,21 @@ export default function Dashboard() {
                 })}
                 {chatStatus === 'submitted' && (
                   <div className="flex justify-start animate-in fade-in duration-300">
-                    <div className="bg-gray-100 dark:bg-[#111] px-4 py-3 rounded-r-lg rounded-tl-lg border border-gray-200 dark:border-gray-800 flex items-center gap-2 transition-colors duration-300">
+                    <div className="bg-gray-100 dark:bg-[#111] px-4 py-3 rounded-none border border-gray-200 dark:border-gray-800 flex items-center gap-2 transition-colors duration-300">
                       <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
                       <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                       <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
                     </div>
                   </div>
                 )}
+                {/* Penanda Akhir Scroll */}
+                <div ref={chatScrollRef} className="h-1"></div>
               </div>
-              <form className="p-3 bg-white dark:bg-[#0a0a0a] border-t border-gray-200 dark:border-gray-800 flex gap-2 items-end transition-colors duration-300" onSubmit={(e) => { e.preventDefault(); if (input.trim() && !chatBusy) { sendMessage({ text: input }); setInput(''); } }}>
+              
+              {/* Form Input Chat */}
+              <form className="p-3 bg-white dark:bg-[#0a0a0a] border-t border-gray-200 dark:border-gray-800 flex gap-2 shrink-0 transition-colors duration-300" onSubmit={(e) => { e.preventDefault(); if (input.trim() && !chatBusy) { sendMessage({ text: input }); setInput(''); } }}>
                 <Textarea 
+                  autoFocus
                   value={input} 
                   onChange={(e) => setInput(e.target.value)} 
                   onKeyDown={(e) => {
@@ -516,31 +649,59 @@ export default function Dashboard() {
                   }}
                   disabled={chatBusy} 
                   className="min-h-[44px] max-h-[120px] py-3 bg-gray-50 dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white placeholder:text-gray-400 font-serif transition-colors duration-300 resize-none" 
-                  placeholder="Ask a question or log data (Shift+Enter for new line)..." 
+                  placeholder="Enter command (Shift+Enter for new line)..." 
                 />
-                <Button type="submit" disabled={chatBusy || !input.trim()} className="h-11 px-5 bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black rounded-none font-bold shrink-0 transition-colors duration-300">Send</Button>
+                <Button type="submit" disabled={chatBusy || !input.trim()} className="h-11 px-6 bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black rounded-none font-bold uppercase shrink-0 transition-colors duration-300">Send</Button>
               </form>
             </div>
-          </>
+          </div>
         )}
 
-        {/* MODAL EDIT SALDO */}
-        <Dialog open={editBalanceOpen} onOpenChange={setEditBalanceOpen}>
+        {/* MODAL INPUT ANGKA (Edit Balance / Fund Target) dengan Spinner Dihilangkan */}
+        <Dialog open={editBalanceOpen || fundGoalOpen} onOpenChange={(isOpen) => { setEditBalanceOpen(isOpen); setFundGoalOpen(isOpen); }}>
           <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none p-6 shadow-xl transition-colors duration-300">
             <div className="space-y-4">
               <DialogHeader>
-                <DialogTitle className="text-xl font-serif font-black text-black dark:text-white border-b border-black dark:border-white pb-3 transition-colors duration-300">Edit Balance</DialogTitle>
+                <DialogTitle className="text-xl font-serif font-black text-black dark:text-white border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">
+                  {editBalanceOpen ? 'Update Balance' : 'Add Funds'}
+                </DialogTitle>
                 <DialogDescription className="text-sm text-gray-600 dark:text-gray-400 pt-3 font-medium transition-colors duration-300">
-                  Update the balance for {selectedAccount?.name}
+                  {editBalanceOpen ? `Set exact balance for ${selectedAccount?.name}` : `Top up progress for ${selectedGoal?.name}`}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">New Amount (IDR)</label>
-                <Input type="number" value={newBalanceAmount} onChange={(e) => setNewBalanceAmount(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300" />
+                <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Amount (IDR)</label>
+                {/* CSS hack disematkan ke className */}
+                <Input type="number" autoFocus value={inputValue} onChange={(e) => setInputValue(e.target.value)} className={cn("bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300", NO_SPINNER_CLASS)} />
               </div>
               <div className="flex gap-3 w-full pt-4">
-                <Button variant="outline" className="flex-1 rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors duration-300" onClick={() => setEditBalanceOpen(false)}>Cancel</Button>
-                <Button onClick={handleUpdateBalance} className="flex-1 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors duration-300">Update</Button>
+                <Button variant="outline" className="flex-1 rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors duration-300" onClick={() => { setEditBalanceOpen(false); setFundGoalOpen(false); }}>Cancel</Button>
+                <Button onClick={editBalanceOpen ? handleUpdateBalance : handleFundGoal} className="flex-1 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors duration-300 uppercase">{editBalanceOpen ? 'Update' : 'Add'}</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal Tambah & Edit Aset Investasi */}
+        <Dialog open={assetDialogOpen || editAssetOpen} onOpenChange={(isOpen) => { setAssetDialogOpen(isOpen); setEditAssetOpen(isOpen); }}>
+          <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none p-6 shadow-xl transition-colors duration-300">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-serif font-black text-black dark:text-white border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">
+                {editAssetOpen ? 'Update Asset' : 'Track Asset'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wide">Ticker Symbol (Yahoo Finance)</label>
+                <Input placeholder="e.g., BBCA.JK, AAPL, BTC-USD" value={assetSymbol} onChange={(e) => setAssetSymbol(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white uppercase" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wide">Number of Units Owned</label>
+                <Input type="number" placeholder="e.g., 100 or 0.5" value={assetUnits} onChange={(e) => setAssetUnits(e.target.value)} className={cn("bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white", NO_SPINNER_CLASS)} />
+              </div>
+              <div className="flex gap-3 w-full pt-4">
+                <Button variant="outline" className="flex-1 rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors duration-300" onClick={() => { setAssetDialogOpen(false); setEditAssetOpen(false); }}>Cancel</Button>
+                <Button onClick={editAssetOpen ? handleEditAsset : handleAddAsset} className="flex-1 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase">{editAssetOpen ? 'Update' : 'Track'}</Button>
               </div>
             </div>
           </DialogContent>
@@ -550,12 +711,10 @@ export default function Dashboard() {
         <Dialog open={deleteConfirm.isOpen} onOpenChange={(isOpen) => setDeleteConfirm(prev => ({ ...prev, isOpen }))}>
           <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none p-6 shadow-xl transition-colors duration-300">
             <div className="space-y-4">
-              <DialogHeader><DialogTitle className="text-xl font-serif font-black text-black dark:text-white border-b border-black dark:border-white pb-3 transition-colors duration-300">Confirm Delete</DialogTitle>
-                <DialogDescription className="text-sm text-gray-600 dark:text-gray-400 pt-3 font-medium transition-colors duration-300">Are you sure you want to permanently delete this record? This action cannot be undone.</DialogDescription>
-              </DialogHeader>
+              <DialogHeader><DialogTitle className="text-xl font-serif font-black text-black dark:text-white border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">Confirm</DialogTitle></DialogHeader>
               <div className="flex gap-3 w-full pt-4">
                 <Button variant="outline" className="flex-1 rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors duration-300" onClick={() => setDeleteConfirm({ isOpen: false, type: null, id: null })}>Cancel</Button>
-                <Button onClick={executeDelete} disabled={isDeleting} className="flex-1 rounded-none bg-[#cc0000] dark:bg-red-600 hover:bg-red-800 dark:hover:bg-red-700 text-white font-bold transition-colors duration-300">{isDeleting ? 'Deleting...' : 'Delete'}</Button>
+                <Button onClick={executeDelete} disabled={isDeleting} className="flex-1 rounded-none bg-[#cc0000] dark:bg-red-600 hover:bg-red-800 dark:hover:bg-red-700 text-white font-bold transition-colors duration-300 uppercase">Delete</Button>
               </div>
             </div>
           </DialogContent>
@@ -564,11 +723,11 @@ export default function Dashboard() {
         {/* MODAL TAMBAH BUDGET */}
         <Dialog open={budgetDialogOpen} onOpenChange={setBudgetDialogOpen}>
           <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none shadow-xl transition-colors duration-300">
-            <DialogHeader><DialogTitle className="text-xl font-serif font-black border-b border-black dark:border-white pb-3 transition-colors duration-300">New Spending Limit</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="text-xl font-serif font-black border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">New Limit</DialogTitle></DialogHeader>
             <div className="space-y-5 pt-3">
               <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Category</label><Input value={newBudgetCategory} onChange={(e) => setNewBudgetCategory(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300" /></div>
-              <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Amount (IDR)</label><Input type="number" value={newBudgetAmount} onChange={(e) => setNewBudgetAmount(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300" /></div>
-              <Button onClick={handleAddBudget} className="w-full rounded-none bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black font-bold mt-2 transition-colors duration-300">Save Limit</Button>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Amount (IDR)</label><Input type="number" value={newBudgetAmount} onChange={(e) => setNewBudgetAmount(e.target.value)} className={cn("bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300", NO_SPINNER_CLASS)} /></div>
+              <Button onClick={handleAddBudget} className="w-full rounded-none bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black font-bold mt-2 transition-colors duration-300 uppercase">Save</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -576,31 +735,17 @@ export default function Dashboard() {
         {/* MODAL TAMBAH GOAL */}
         <Dialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen}>
           <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none shadow-xl transition-colors duration-300">
-            <DialogHeader><DialogTitle className="text-xl font-serif font-black border-b border-black dark:border-white pb-3 transition-colors duration-300">New Target</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="text-xl font-serif font-black border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">New Target</DialogTitle></DialogHeader>
             <div className="space-y-5 pt-3">
               <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Target Name</label><Input value={newGoalName} onChange={(e) => setNewGoalName(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300" /></div>
-              <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Amount (IDR)</label><Input type="number" value={newGoalTarget} onChange={(e) => setNewGoalTarget(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300" /></div>
-              <div className="space-y-1.5 flex flex-col">
-                <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Deadline</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white rounded-none hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors duration-300", !newGoalDeadline && "text-gray-500 dark:text-gray-400")}>
-                      <CalendarIcon className="mr-2 h-4 w-4 text-black dark:text-white" />
-                      {newGoalDeadline ? <span className="text-sm font-medium text-black dark:text-white">{format(newGoalDeadline, "PPP", { locale: idLocale })}</span> : <span className="text-sm">Select Date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 rounded-none shadow-xl transition-colors duration-300" align="start">
-                    <Calendar mode="single" selected={newGoalDeadline} onSelect={setNewGoalDeadline} initialFocus className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white" />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <Button onClick={handleAddGoal} className="w-full rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold mt-2 transition-colors duration-300">Create Target</Button>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Target Amount (IDR)</label><Input type="number" value={newGoalTarget} onChange={(e) => setNewGoalTarget(e.target.value)} className={cn("bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300", NO_SPINNER_CLASS)} /></div>
+              <Button onClick={handleAddGoal} className="w-full rounded-none bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black font-bold mt-2 transition-colors duration-300 uppercase">Save</Button>
             </div>
           </DialogContent>
         </Dialog>
 
       </div>
-      <TransactionDialog open={transactionDialogOpen} onOpenChange={setTransactionDialogOpen} initialType={transactionDialogInitialType} accounts={accounts} onSubmitted={() => fetchData()} />
+      <TransactionDialog open={transactionDialogOpen} onOpenChange={setTransactionDialogOpen} initialType={transactionDialogInitialType} accounts={accounts} onSubmitted={() => fetchData(false)} />
     </div>
   );
 }

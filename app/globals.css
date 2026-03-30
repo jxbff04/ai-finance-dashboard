@@ -80,11 +80,12 @@
     @apply bg-background text-foreground;
   }
 }
-/* Menyembunyikan wujud scrollbar tapi tetap bisa digeser */
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+
+/* Menyembunyikan wujud scrollbar secara global tapi tetap bisa digeser */
+* {
+  scrollbar-width: none; /* Untuk browser Firefox */
+  -ms-overflow-style: none; /* Untuk IE dan Edge */
 }
-.scrollbar-hide {
-  -ms-overflow-style: none;  /* Untuk browser Internet Explorer/Edge */
-  scrollbar-width: none;     /* Untuk browser Firefox */
+*::-webkit-scrollbar {
+  display: none; /* Untuk Chrome, Safari, dan Opera */
 }

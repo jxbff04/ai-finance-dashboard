@@ -91,7 +91,8 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
     try {
       const finalAmount = type === 'expense' ? -Math.abs(Number(amount)) : Math.abs(Number(amount));
 
-      const { error } = await supabase.from('transactions').insert({
+      // 1. Simpan data transaksi
+      const { error: txErr } = await supabase.from('transactions').insert({
         account_id: accountId,
         category_id: categoryId || null,
         amount: finalAmount,
@@ -99,7 +100,15 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
         notes,
         transaction_date: format(date, 'yyyy-MM-dd')
       });
-      if (error) throw error;
+      if (txErr) throw txErr;
+
+      // 2. Potong/Tambah saldo akun di Database (Perbaikan Masalah #1 manual input)
+      const targetAccount = accounts.find(a => String(a.id) === accountId);
+      if (targetAccount) {
+        const newBalance = Number(targetAccount.balance || 0) + finalAmount;
+        await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId);
+      }
+
       toast.success('Transaction logged.');
       onSubmitted();
       onOpenChange(false);
@@ -160,8 +169,16 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
                     {date ? format(date, "d MMM yyyy", { locale: idLocale }) : <span>Select date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-white dark:bg-[#0a0a0a] border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none shadow-xl transition-colors duration-300" align="center">
-                  <Calendar mode="single" selected={date} onSelect={setDate} initialFocus className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white" />
+                
+                {/* PERBAIKAN TAMPILAN KALENDER (Masalah #5) */}
+                <PopoverContent className="w-auto p-0 bg-[#0a0a0a] border border-gray-800 text-white rounded-none shadow-2xl" align="center">
+                  <Calendar 
+                    mode="single" 
+                    selected={date} 
+                    onSelect={setDate} 
+                    initialFocus 
+                    className="bg-[#0a0a0a] text-white rounded-none p-3 font-serif" 
+                  />
                 </PopoverContent>
               </Popover>
             </div>
@@ -169,7 +186,7 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block transition-colors duration-300">Amount (IDR)</label>
-            <Input type="number" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} className="[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 placeholder:text-gray-400 focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white rounded-none transition-colors duration-300" />
+            <Input type="number" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 placeholder:text-gray-400 focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white rounded-none transition-colors duration-300" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

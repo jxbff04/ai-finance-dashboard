@@ -59,11 +59,20 @@ Tanggal hari ini: ${new Date().toISOString().split('T')[0]}`;
               const { amount, type, notes, category_name, date, account_name } = tx;
               try {
                 let account_id = null;
-                const { data: accData } = await supabase.from('accounts').select('id').ilike('name', `%${account_name}%`).limit(1).single();
-                if (accData) { account_id = accData.id; } 
+                let current_balance = 0;
+                
+                // Ambil ID dan Saldo (Balance) Akun saat ini
+                const { data: accData } = await supabase.from('accounts').select('id, balance').ilike('name', `%${account_name}%`).limit(1).single();
+                if (accData) { 
+                  account_id = accData.id; 
+                  current_balance = Number(accData.balance || 0);
+                } 
                 else {
-                  const { data: newAcc } = await supabase.from('accounts').insert({ name: account_name, type: 'E-WALLET', balance: 0 }).select('id').single();
-                  if (newAcc) account_id = newAcc.id;
+                  const { data: newAcc } = await supabase.from('accounts').insert({ name: account_name, type: 'E-WALLET', balance: 0 }).select('id, balance').single();
+                  if (newAcc) {
+                    account_id = newAcc.id;
+                    current_balance = 0;
+                  }
                 }
                 if (!account_id) continue;
 
@@ -80,11 +89,16 @@ Tanggal hari ini: ${new Date().toISOString().split('T')[0]}`;
 
                 const finalAmount = type === 'expense' ? -Math.abs(amount) : Math.abs(amount);
 
+                // Insert Transaksi
                 const { error: txErr } = await supabase.from('transactions').insert({
                   account_id, category_id, amount: finalAmount, type, notes, transaction_date: date,
                 });
 
+                // Jika transaksi sukses, update saldo akun
                 if (!txErr) {
+                  const newBalance = current_balance + finalAmount;
+                  await supabase.from('accounts').update({ balance: newBalance }).eq('id', account_id);
+                  
                   successCount++;
                   laporan.push(`- Rp${Math.abs(amount)}: ${notes} (${account_name})`);
                 }
