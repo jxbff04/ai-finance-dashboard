@@ -259,15 +259,85 @@ export default function Dashboard() {
     setIsDeleting(true);
     try {
       if (type === 'asset') {
+        // Asset disimpan di localStorage, tidak ada saldo yang perlu di-rollback
         const updated = myAssets.filter(a => a.id !== id);
-        setMyAssets(updated); localStorage.setItem('blackjack_assets', JSON.stringify(updated));
+        setMyAssets(updated);
+        localStorage.setItem('blackjack_assets', JSON.stringify(updated));
+
+      } else if (type === 'transaction') {
+        // 1. Ambil data transaksi sebelum dihapus
+        const { data: txData, error: fetchErr } = await supabase
+          .from('transactions')
+          .select('id, account_id, amount, type, notes, transaction_date')
+          .eq('id', id)
+          .single();
+        if (fetchErr || !txData) throw new Error('Transaction not found');
+
+        const amountToReverse = Number(txData.amount);
+
+        if (txData.type === 'transfer') {
+          // Transfer: cari transaksi pasangannya (notes sama, tanggal sama, account berbeda)
+          const { data: paired } = await supabase
+            .from('transactions')
+            .select('id, account_id, amount')
+            .eq('notes', txData.notes)
+            .eq('transaction_date', txData.transaction_date)
+            .eq('type', 'transfer')
+            .neq('id', id);
+
+          // Rollback saldo akun sumber (transaksi ini)
+          const { data: srcAcc } = await supabase
+            .from('accounts').select('balance').eq('id', txData.account_id).single();
+          if (srcAcc) {
+            await supabase.from('accounts')
+              .update({ balance: Number(srcAcc.balance) - amountToReverse })
+              .eq('id', txData.account_id);
+          }
+
+          // Rollback saldo akun tujuan (transaksi pasangan) + hapus transaksi pasangan
+          if (paired && paired.length > 0) {
+            const partner = paired[0];
+            const { data: dstAcc } = await supabase
+              .from('accounts').select('balance').eq('id', partner.account_id).single();
+            if (dstAcc) {
+              await supabase.from('accounts')
+                .update({ balance: Number(dstAcc.balance) - Number(partner.amount) })
+                .eq('id', partner.account_id);
+            }
+            // Hapus transaksi pasangan juga
+            await supabase.from('transactions').delete().eq('id', partner.id);
+          }
+
+        } else {
+          // Income / Expense biasa: balik saldo (kurangi apa yang pernah ditambah)
+          const { data: acc } = await supabase
+            .from('accounts').select('balance').eq('id', txData.account_id).single();
+          if (acc) {
+            await supabase.from('accounts')
+              .update({ balance: Number(acc.balance) - amountToReverse })
+              .eq('id', txData.account_id);
+          }
+        }
+
+        // 2. Hapus transaksi utama
+        const { error: delErr } = await supabase.from('transactions').delete().eq('id', id);
+        if (delErr) throw delErr;
+
       } else {
-        const { error } = await supabase.from(type === 'transaction' ? 'transactions' : type === 'budget' ? 'budgets' : 'goals').delete().eq('id', id);
+        // Budget / Goal: hapus langsung, tidak ada efek ke saldo
+        const table = type === 'budget' ? 'budgets' : 'goals';
+        const { error } = await supabase.from(table).delete().eq('id', id);
         if (error) throw error;
       }
-      toast.success('Data deleted'); fetchData(false);
-    } catch (err) { toast.error('Deletion failed'); } 
-    finally { setIsDeleting(false); setDeleteConfirm({ isOpen: false, type: null, id: null }); }
+
+      toast.success('Deleted & balance restored');
+      fetchData(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Deletion failed');
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm({ isOpen: false, type: null, id: null });
+    }
   };
 
   const handleAddBudget = async () => {
