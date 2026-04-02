@@ -70,8 +70,8 @@ export function ModeProvider({ children }: { children: ReactNode }) {
   };
 
   const enterPrivate = (pin: string): boolean => {
-    const correctPin = process.env.NEXT_PUBLIC_APP_PIN || '1234';
-    if (pin === correctPin) {
+    const correctPin = (process.env.NEXT_PUBLIC_APP_PIN || '1234').trim();
+    if (pin.trim() === correctPin) {
       setMode('private');
       return true;
     }

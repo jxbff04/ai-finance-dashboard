@@ -454,7 +454,6 @@ export default function Dashboard() {
       <div className="w-full max-w-md bg-white dark:bg-[#0a0a0a] min-h-screen relative flex flex-col border-x border-gray-300 dark:border-gray-800 overflow-x-hidden shadow-sm transition-colors duration-300">
         
         {/* HEADER */}
-        {mode === 'guest' && <GuestBanner />}
         <header className="sticky top-0 z-30 bg-black dark:bg-[#000000] flex flex-col transition-colors duration-300">
           <div className="px-5 pt-6 pb-4 flex items-center justify-between">
             <h1 className="text-3xl font-sans font-bold tracking-tighter text-white leading-none">
