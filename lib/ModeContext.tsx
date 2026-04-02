@@ -10,6 +10,7 @@ interface ModeContextValue {
   sessionId: string | null;
   enterGuest: () => Promise<void>;
   enterPrivate: (pin: string) => boolean;
+  changePin: (oldPin: string, newPin: string) => boolean;
   exitMode: () => Promise<void>;
 }
 
@@ -18,6 +19,7 @@ const ModeContext = createContext<ModeContextValue>({
   sessionId: null,
   enterGuest: async () => {},
   enterPrivate: () => false,
+  changePin: () => false,
   exitMode: async () => {},
 });
 
@@ -69,8 +71,15 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     setMode('guest');
   };
 
+  const getStoredPin = (): string => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('bj_pin') || '141201';
+    }
+    return '141201';
+  };
+
   const enterPrivate = (pin: string): boolean => {
-    const correctPin = '141201';
+    const correctPin = getStoredPin();
     if (pin.trim() === correctPin) {
       setMode('private');
       return true;
@@ -78,12 +87,21 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
+  const changePin = (oldPin: string, newPin: string): boolean => {
+    const correctPin = getStoredPin();
+    if (oldPin.trim() !== correctPin) return false;
+    localStorage.setItem('bj_pin', newPin.trim());
+    return true;
+  };
+
   const exitMode = async () => {
     if (mode === 'guest' && sessionId) {
       try {
-        await supabase.from('guest_transactions').delete().eq('session_id', sessionId);
-        await supabase.from('guest_accounts').delete().eq('session_id', sessionId);
-        await supabase.from('guest_sessions').delete().eq('session_id', sessionId);
+      await supabase.from('guest_transactions').delete().eq('session_id', sessionId);
+      await supabase.from('guest_accounts').delete().eq('session_id', sessionId);
+      await supabase.from('guest_budgets').delete().eq('session_id', sessionId);
+      await supabase.from('guest_goals').delete().eq('session_id', sessionId);
+      await supabase.from('guest_sessions').delete().eq('session_id', sessionId);
       } catch (e) {
         console.error('Failed to cleanup guest data:', e);
       }
@@ -93,7 +111,7 @@ export function ModeProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ModeContext.Provider value={{ mode, sessionId, enterGuest, enterPrivate, exitMode }}>
+    <ModeContext.Provider value={{ mode, sessionId, enterGuest, enterPrivate, changePin, exitMode }}>
       {children}
     </ModeContext.Provider>
   );

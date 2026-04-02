@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import {
-  TrendingUp, TrendingDown, Trash2, MessageSquare, Loader2, Moon, Sun, Pencil, RefreshCw, PlusCircle, Download
+  TrendingUp, TrendingDown, Trash2, MessageSquare, Loader2, Moon, Sun, Pencil, RefreshCw, ShieldCheck, PlusCircle, Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import TransactionDialog from '@/components/transaction/TransactionDialog';
+import SwipeableTransaction from '@/components/transaction/SwipeableTransaction';
+import { type TransactionToEdit } from '@/components/transaction/TransactionDialog';
 import { useMode } from '@/lib/ModeContext';
+import ChangePinDialog from '@/components/ChangePinDialog';
 import RecurringPanel from '@/components/recurring/RecurringPanel';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -106,6 +109,7 @@ const formatDateForGrouping = (dateString: string): string => {
 };
 
 export default function Dashboard() {
+  const [changePinOpen, setChangePinOpen] = useState(false);
   const { mode, sessionId } = useMode();
   const isGuest = mode === 'guest';
   const [showAIAssistant, setShowAIAssistant] = useState(false);
@@ -148,6 +152,7 @@ export default function Dashboard() {
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; type: 'transaction' | 'budget' | 'goal' | 'asset' | null; id: string | null }>({ isOpen: false, type: null, id: null });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<TransactionToEdit | null>(null);
 
   const [input, setInput] = useState('');
   const [txFilter, setTxFilter] = useState<TxFilter>({ type: 'all', accountId: 'all' });
@@ -203,9 +208,12 @@ export default function Dashboard() {
           accounts: { name: accountsById.get(String(t.account_id)) || '' },
         })));
 
-        // Guest tidak punya budgets/goals
-        setBudgets([]);
-        setGoals([]);
+      // Guest punya budget dan goal sendiri di tabel terpisah
+        const guestBudgetsRes = await supabase.from('guest_budgets').select('*').eq('session_id', sessionId).eq('month', selectedMonth);
+        if (guestBudgetsRes.data) setBudgets(guestBudgetsRes.data);
+
+        const guestGoalsRes = await supabase.from('guest_goals').select('*').eq('session_id', sessionId).order('created_at', { ascending: false });
+        if (guestGoalsRes.data) setGoals(guestGoalsRes.data);
 
       } else {
         // ── PRIVATE MODE: baca dari tabel normal ─────────────────────────
@@ -253,7 +261,8 @@ export default function Dashboard() {
     if (!selectedGoal || inputValue === '') return toast.error('Amount is required');
     try {
       const newAmt = Number(selectedGoal.current_amount) + Number(inputValue);
-      const { error } = await supabase.from('goals').update({ current_amount: newAmt }).eq('id', selectedGoal.id);
+      const table = isGuest ? 'guest_goals' : 'goals';
+      const { error } = await supabase.from(table).update({ current_amount: newAmt }).eq('id', selectedGoal.id);
       if (error) throw error;
       toast.success('Funds added successfully'); setFundGoalOpen(false); fetchData(false);
     } catch (err) { toast.error('Failed to add funds'); }
@@ -367,7 +376,8 @@ export default function Dashboard() {
 
       } else {
         // Budget / Goal: hapus langsung, tidak ada efek ke saldo
-        const table = type === 'budget' ? 'budgets' : 'goals';
+        let table = type === 'budget' ? 'budgets' : 'goals';
+        if (isGuest) table = type === 'budget' ? 'guest_budgets' : 'guest_goals';
         const { error } = await supabase.from(table).delete().eq('id', id);
         if (error) throw error;
       }
@@ -385,7 +395,11 @@ export default function Dashboard() {
   const handleAddBudget = async () => {
     if (!newBudgetCategory || !newBudgetAmount) return toast.error('Fill all fields');
     try {
-      const { error } = await supabase.from('budgets').insert({ category_name: newBudgetCategory, amount: Math.abs(Number(newBudgetAmount)), month: selectedMonth });
+      const table = isGuest ? 'guest_budgets' : 'budgets';
+      const payload = isGuest
+        ? { session_id: sessionId, category_name: newBudgetCategory, amount: Math.abs(Number(newBudgetAmount)), month: selectedMonth }
+        : { category_name: newBudgetCategory, amount: Math.abs(Number(newBudgetAmount)), month: selectedMonth };
+      const { error } = await supabase.from(table).insert(payload);
       if (error) throw error;
       toast.success('Budget added'); setBudgetDialogOpen(false); fetchData(false);
     } catch (err: any) { toast.error(err.message); }
@@ -394,7 +408,11 @@ export default function Dashboard() {
   const handleAddGoal = async () => {
     if (!newGoalName || !newGoalTarget) return toast.error('Name and target required');
     try {
-      const { error } = await supabase.from('goals').insert({ name: newGoalName, target_amount: Math.abs(Number(newGoalTarget)), deadline: newGoalDeadline ? format(newGoalDeadline, 'yyyy-MM-dd') : null });
+      const table = isGuest ? 'guest_goals' : 'goals';
+      const payload = isGuest
+        ? { session_id: sessionId, name: newGoalName, target_amount: Math.abs(Number(newGoalTarget)), current_amount: 0, deadline: newGoalDeadline ? format(newGoalDeadline, 'yyyy-MM-dd') : null }
+        : { name: newGoalName, target_amount: Math.abs(Number(newGoalTarget)), deadline: newGoalDeadline ? format(newGoalDeadline, 'yyyy-MM-dd') : null };
+      const { error } = await supabase.from(table).insert(payload);
       if (error) throw error;
       toast.success('Goal created'); setGoalDialogOpen(false); setNewGoalDeadline(undefined); fetchData(false);
     } catch (err: any) { toast.error(err.message); }
@@ -463,6 +481,11 @@ export default function Dashboard() {
               <button onClick={() => fetchData(false)} className={cn("p-1.5 rounded-full text-white hover:bg-gray-800 transition-all", isRefreshing && "animate-spin")}>
                 <RefreshCw className="w-4 h-4" />
               </button>
+              {mode === 'private' && (
+                <button onClick={() => setChangePinOpen(true)} className="p-1.5 rounded-full text-white hover:bg-gray-800 transition-colors">
+                  <ShieldCheck className="w-4 h-4" />
+                </button>
+              )}
               <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1.5 rounded-full text-white hover:bg-gray-800 transition-colors">
                 {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
@@ -845,16 +868,32 @@ export default function Dashboard() {
                       {txs.map((tx) => {
                         const amt = toNumber(tx.amount); const isInc = tx.type === 'income';
                         return (
-                          <div key={tx.id} className="group flex items-start justify-between hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors -mx-2 px-2 py-1">
-                            <div className="min-w-0 flex-1 pr-3">
-                              <p className="text-sm font-serif font-bold text-black dark:text-white truncate transition-colors duration-300">{tx.notes || 'Unnamed Transaction'}</p>
-                              <p className="text-[10px] font-medium text-gray-500 uppercase mt-0.5">{tx.category} • {tx.accounts?.name}</p>
+                          <SwipeableTransaction
+                            key={tx.id}
+                            onEdit={() => {
+                              setEditingTransaction({
+                                id: tx.id,
+                                account_id: tx.account_id,
+                                amount: tx.amount,
+                                type: tx.type,
+                                notes: tx.notes,
+                                category: tx.category,
+                                transaction_date: tx.transaction_date,
+                              });
+                              setTransactionDialogOpen(true);
+                            }}
+                            onDelete={() => confirmDelete('transaction', tx.id)}
+                          >
+                            <div className="flex items-start justify-between hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors -mx-2 px-2 py-1">
+                              <div className="min-w-0 flex-1 pr-3">
+                                <p className="text-sm font-serif font-bold text-black dark:text-white truncate transition-colors duration-300">{tx.notes || 'Unnamed Transaction'}</p>
+                                <p className="text-[10px] font-medium text-gray-500 uppercase mt-0.5">{tx.category} • {tx.accounts?.name}</p>
+                              </div>
+                              <div className="flex flex-col items-end shrink-0">
+                                <p className={`font-sans text-sm font-bold transition-colors duration-300 ${isInc ? 'text-green-600 dark:text-green-500' : 'text-black dark:text-white'}`}>{isInc ? '+' : ''}{formatCurrency(amt)}</p>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-end shrink-0">
-                              <p className={`font-sans text-sm font-bold transition-colors duration-300 ${isInc ? 'text-green-600 dark:text-green-500' : 'text-black dark:text-white'}`}>{isInc ? '+' : ''}{formatCurrency(amt)}</p>
-                              <button onClick={() => confirmDelete('transaction', tx.id)} className="text-[10px] font-bold text-[#cc0000] dark:text-red-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity uppercase">Delete</button>
-                            </div>
-                          </div>
+                          </SwipeableTransaction>
                         );
                       })}
                     </div>
@@ -1030,7 +1069,20 @@ export default function Dashboard() {
         </Dialog>
 
       </div>
-      <TransactionDialog open={transactionDialogOpen} onOpenChange={setTransactionDialogOpen} initialType={transactionDialogInitialType} accounts={accounts} onSubmitted={() => fetchData(false)} />
+      <ChangePinDialog open={changePinOpen} onOpenChange={setChangePinOpen} />
+      <TransactionDialog
+        open={transactionDialogOpen}
+        onOpenChange={(open) => {
+          setTransactionDialogOpen(open);
+          if (!open) setEditingTransaction(null);
+        }}
+        initialType={transactionDialogInitialType}
+        accounts={accounts}
+        onSubmitted={() => fetchData(false)}
+        mode={mode}
+        sessionId={sessionId}
+        editTransaction={editingTransaction}
+      />
     </div>
   );
 }
