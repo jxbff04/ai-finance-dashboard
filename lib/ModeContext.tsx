@@ -71,7 +71,9 @@ export function ModeProvider({ children }: { children: ReactNode }) {
 
   const enterPrivate = (pin: string): boolean => {
     const correctPin = (process.env.NEXT_PUBLIC_APP_PIN || '1234').trim();
-    if (pin.trim() === correctPin) {
+    const cleanPin = pin.replace(/\D/g, '').trim();
+    console.log('[PIN DEBUG] input:', JSON.stringify(pin), '| clean:', JSON.stringify(cleanPin), '| correct:', JSON.stringify(correctPin));
+    if (cleanPin === correctPin) {
       setMode('private');
       return true;
     }

@@ -144,6 +144,9 @@ export default function SplashScreen() {
             ))}
           </div>
 
+          {/* DEBUG — hapus setelah fix */}
+          <p className="text-center text-yellow-400 font-mono text-xs">{pin} | env: {process.env.NEXT_PUBLIC_APP_PIN}</p>
+
           {/* Hidden input untuk keyboard fisik */}
           <input
             ref={inputRef}
