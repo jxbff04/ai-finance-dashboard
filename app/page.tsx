@@ -16,9 +16,13 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import TransactionDialog from '@/components/transaction/TransactionDialog';
+import { useMode } from '@/lib/ModeContext';
+import RecurringPanel from '@/components/recurring/RecurringPanel';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import SplashScreen from '@/components/SplashScreen';
+import GuestBanner from '@/components/GuestBanner';
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
@@ -29,7 +33,7 @@ interface Goal { id: string; name: string; target_amount: number; current_amount
 interface InvestmentAsset { id: string; symbol: string; units: number; }
 
 type TxFilter = { type: 'all' | 'income' | 'expense' | 'transfer'; accountId: 'all' | string; };
-type ActiveTab = 'Portfolios' | 'Budgets' | 'Targets' | 'Assets';
+type ActiveTab = 'Overview' | 'Portfolios' | 'Budgets' | 'Targets' | 'Assets' | 'Recurring';
 
 const PIE_COLORS = ['#333333', '#666666', '#999999', '#cccccc', '#f5f5f5', '#1a1a1a'];
 
@@ -102,9 +106,11 @@ const formatDateForGrouping = (dateString: string): string => {
 };
 
 export default function Dashboard() {
+  const { mode, sessionId } = useMode();
+  const isGuest = mode === 'guest';
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('Portfolios');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('Overview');
   
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -183,32 +189,53 @@ export default function Dashboard() {
     fetchPrices();
     try {
       let accountsById = new Map<string, string>();
-      const accountsRes = await withTimeout<any>(supabase.from('accounts').select('*').order('name', { ascending: true }), 15000);
-      if (accountsRes.error) throw accountsRes.error;
-      setAccounts(accountsRes.data || []);
-      accountsById = new Map((accountsRes.data || []).map((a: any) => [String(a.id), String(a.name)]));
+      if (isGuest && sessionId) {
+        // ── GUEST MODE: baca dari tabel guest_* ──────────────────────────
+        const guestAccRes = await supabase.from('guest_accounts').select('*').eq('session_id', sessionId).order('created_at', { ascending: true });
+        const guestAccounts = (guestAccRes.data || []).map((a: any) => ({ id: String(a.id), name: a.name, type: a.type, balance: a.balance }));
+        setAccounts(guestAccounts);
+        accountsById = new Map(guestAccounts.map((a: any) => [String(a.id), String(a.name)]));
 
-      let categoriesById = new Map<string, string>();
-      const catRes = await withTimeout<any>(supabase.from('categories').select('id, name'), 15000);
-      if (!catRes.error) categoriesById = new Map((catRes.data || []).map((c: any) => [String(c.id), String(c.name)]));
+        const guestTxRes = await supabase.from('guest_transactions').select('*').eq('session_id', sessionId).order('transaction_date', { ascending: false });
+        setTransactions((guestTxRes.data || []).map((t: any) => ({
+          id: String(t.id), account_id: String(t.account_id), transaction_date: String(t.transaction_date || ''), notes: String(t.notes || ''),
+          category: t.category || 'General', amount: t.amount, type: (t.type || 'expense') as Transaction['type'],
+          accounts: { name: accountsById.get(String(t.account_id)) || '' },
+        })));
 
-      const txRes = await withTimeout<any>(supabase.from('transactions').select('*').order('transaction_date', { ascending: false }), 15000);
-      if (txRes.error) throw txRes.error;
-      setTransactions((txRes.data || []).map((t: any) => ({
-        id: String(t.id), account_id: String(t.account_id), transaction_date: String(t.transaction_date || ''), notes: String(t.notes || ''),
-        category: t.type === 'transfer' ? 'Transfer' : categoriesById.get(String(t.category_id)) || 'Uncategorized', amount: t.amount, type: (t.type || 'expense') as Transaction['type'],
-        accounts: { name: accountsById.get(String(t.account_id)) || '' },
-      })));
+        // Guest tidak punya budgets/goals
+        setBudgets([]);
+        setGoals([]);
 
-      const budgetsRes = await supabase.from('budgets').select('*').eq('month', selectedMonth);
-      if (budgetsRes.data) setBudgets(budgetsRes.data);
+      } else {
+        // ── PRIVATE MODE: baca dari tabel normal ─────────────────────────
+        const accountsRes = await withTimeout<any>(supabase.from('accounts').select('*').order('name', { ascending: true }), 15000);
+        if (accountsRes.error) throw accountsRes.error;
+        setAccounts(accountsRes.data || []);
+        accountsById = new Map((accountsRes.data || []).map((a: any) => [String(a.id), String(a.name)]));
 
-      const goalsRes = await supabase.from('goals').select('*').order('created_at', { ascending: false });
-      if (goalsRes.data) setGoals(goalsRes.data);
+        let categoriesById = new Map<string, string>();
+        const catRes = await withTimeout<any>(supabase.from('categories').select('id, name'), 15000);
+        if (!catRes.error) categoriesById = new Map((catRes.data || []).map((c: any) => [String(c.id), String(c.name)]));
+
+        const txRes = await withTimeout<any>(supabase.from('transactions').select('*').order('transaction_date', { ascending: false }), 15000);
+        if (txRes.error) throw txRes.error;
+        setTransactions((txRes.data || []).map((t: any) => ({
+          id: String(t.id), account_id: String(t.account_id), transaction_date: String(t.transaction_date || ''), notes: String(t.notes || ''),
+          category: t.type === 'transfer' ? 'Transfer' : categoriesById.get(String(t.category_id)) || 'Uncategorized', amount: t.amount, type: (t.type || 'expense') as Transaction['type'],
+          accounts: { name: accountsById.get(String(t.account_id)) || '' },
+        })));
+
+        const budgetsRes = await supabase.from('budgets').select('*').eq('month', selectedMonth);
+        if (budgetsRes.data) setBudgets(budgetsRes.data);
+
+        const goalsRes = await supabase.from('goals').select('*').order('created_at', { ascending: false });
+        if (goalsRes.data) setGoals(goalsRes.data);
+      }
 
     } catch (err) { console.error(err); toast.error('Failed to load data'); } 
     finally { setLoading(false); setTimeout(() => setIsRefreshing(false), 500); }
-  }, [selectedMonth, fetchPrices]);
+  }, [selectedMonth, fetchPrices, isGuest, sessionId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -268,7 +295,7 @@ export default function Dashboard() {
         // 1. Ambil data transaksi sebelum dihapus
         const { data: txData, error: fetchErr } = await supabase
           .from('transactions')
-          .select('id, account_id, amount, type, notes, transaction_date')
+          .select('id, account_id, category_id, amount, type, notes, transaction_date')
           .eq('id', id)
           .single();
         if (fetchErr || !txData) throw new Error('Transaction not found');
@@ -319,9 +346,24 @@ export default function Dashboard() {
           }
         }
 
-        // 2. Hapus transaksi utama
+        // 2. Simpan category_id sebelum dihapus
+        const orphanCategoryId = txData.category_id;
+
+        // 3. Hapus transaksi utama
         const { error: delErr } = await supabase.from('transactions').delete().eq('id', id);
         if (delErr) throw delErr;
+
+        // 4. Hapus kategori jika tidak dipakai transaksi lain
+        if (orphanCategoryId) {
+          const { count } = await supabase
+            .from('transactions')
+            .select('id', { count: 'exact', head: true })
+            .eq('category_id', orphanCategoryId);
+          
+          if (count === 0) {
+            await supabase.from('categories').delete().eq('id', orphanCategoryId);
+          }
+        }
 
       } else {
         // Budget / Goal: hapus langsung, tidak ada efek ke saldo
@@ -412,6 +454,7 @@ export default function Dashboard() {
       <div className="w-full max-w-md bg-white dark:bg-[#0a0a0a] min-h-screen relative flex flex-col border-x border-gray-300 dark:border-gray-800 overflow-x-hidden shadow-sm transition-colors duration-300">
         
         {/* HEADER */}
+        {mode === 'guest' && <GuestBanner />}
         <header className="sticky top-0 z-30 bg-black dark:bg-[#000000] flex flex-col transition-colors duration-300">
           <div className="px-5 pt-6 pb-4 flex items-center justify-between">
             <h1 className="text-3xl font-sans font-bold tracking-tighter text-white leading-none">
@@ -470,11 +513,184 @@ export default function Dashboard() {
           <div className="border-b border-black dark:border-gray-700 pb-2 animate-in fade-in slide-in-from-bottom-2 duration-500 transition-colors duration-300">
              <h2 className="text-4xl font-serif font-black tracking-tight text-black dark:text-white mb-1 transition-colors duration-300">Markets</h2>
              <div className="flex gap-5 text-xs font-medium text-gray-600 dark:text-gray-400 mt-4 transition-colors duration-300 overflow-x-auto pb-1">
-               {['Portfolios', 'Budgets', 'Targets', 'Assets'].map((tab) => (
+               {['Overview', 'Portfolios', 'Budgets', 'Targets', 'Assets', 'Recurring'].map((tab) => (
                  <span key={tab} onClick={() => setActiveTab(tab as ActiveTab)} className={cn("cursor-pointer pb-1 border-b-2 whitespace-nowrap uppercase transition-all duration-300", activeTab === tab ? "border-black dark:border-white text-black dark:text-white font-bold" : "border-transparent hover:text-black dark:hover:text-white")}>{tab}</span>
                ))}
              </div>
           </div>
+
+          {/* TAB 0: OVERVIEW */}
+                    {activeTab === 'Overview' && (
+                      <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6">
+
+                        {/* NET WORTH CARD */}
+                        <div className="border border-black dark:border-gray-700 p-4 transition-colors duration-300">
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Total Net Worth</p>
+                          <p className="text-4xl font-serif font-black text-black dark:text-white leading-none tracking-tight">
+                            {formatCurrency(grandTotalAssets)}
+                          </p>
+                          <div className="flex gap-4 mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
+                            <div>
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Liquid</p>
+                              <p className="text-sm font-bold text-black dark:text-white">{formatCurrency(totalLiquidNetWorth)}</p>
+                            </div>
+                            <div className="w-px bg-gray-200 dark:bg-gray-800" />
+                            <div>
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Investments</p>
+                              <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{formatCurrency(totalInvestments)}</p>
+                            </div>
+                            <div className="w-px bg-gray-200 dark:bg-gray-800" />
+                            <div>
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Invest %</p>
+                              <p className="text-sm font-bold text-black dark:text-white">
+                                {grandTotalAssets > 0 ? ((totalInvestments / grandTotalAssets) * 100).toFixed(1) : '0'}%
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* MONTHLY CASHFLOW CARD */}
+                        <div className="border border-gray-200 dark:border-gray-800 p-4 transition-colors duration-300">
+                          <div className="flex justify-between items-start mb-3">
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Monthly Cashflow</p>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">{selectedMonth}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Income</p>
+                              <p className="text-base font-bold text-green-600 dark:text-green-500">{formatCurrency(monthlyIncome)}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Expense</p>
+                              <p className="text-base font-bold text-red-600 dark:text-red-400">{formatCurrency(monthlyExpense)}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Net</p>
+                              <p className={`text-base font-bold ${monthlyIncome - monthlyExpense >= 0 ? 'text-black dark:text-white' : 'text-red-600 dark:text-red-400'}`}>
+                                {monthlyIncome - monthlyExpense >= 0 ? '+' : ''}{formatCurrency(monthlyIncome - monthlyExpense)}
+                              </p>
+                            </div>
+                          </div>
+                          {/* Savings Rate Bar */}
+                          {monthlyIncome > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                              <div className="flex justify-between items-center mb-1.5">
+                                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Savings Rate</p>
+                                <p className="text-[10px] font-bold text-black dark:text-white">
+                                  {Math.max(0, ((monthlyIncome - monthlyExpense) / monthlyIncome) * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                              <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden">
+                                <div
+                                  className={`h-full transition-all duration-1000 ${((monthlyIncome - monthlyExpense) / monthlyIncome) >= 0.2 ? 'bg-green-600 dark:bg-green-500' : 'bg-orange-500'}`}
+                                  style={{ width: `${Math.min(100, Math.max(0, ((monthlyIncome - monthlyExpense) / monthlyIncome) * 100))}%` }}
+                                />
+                              </div>
+                              <p className="text-[9px] text-gray-400 mt-1">{((monthlyIncome - monthlyExpense) / monthlyIncome) >= 0.2 ? '✓ On track — saving above 20%' : '⚠ Below 20% savings target'}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* WALLET BREAKDOWN */}
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Wallet Breakdown</p>
+                          <div className="space-y-2">
+                            {accounts.map(acc => {
+                              const bal = toNumber(acc.balance);
+                              const pct = totalLiquidNetWorth > 0 ? (bal / totalLiquidNetWorth) * 100 : 0;
+                              return (
+                                <div key={acc.id} className="flex items-center gap-3">
+                                  <div className="w-20 shrink-0">
+                                    <p className="text-xs font-bold text-black dark:text-white truncate">{acc.name}</p>
+                                    <p className="text-[9px] text-gray-400 uppercase">{acc.type}</p>
+                                  </div>
+                                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden">
+                                    <div className="h-full bg-black dark:bg-white transition-all duration-1000" style={{ width: `${Math.max(0, pct)}%` }} />
+                                  </div>
+                                  <div className="w-20 text-right shrink-0">
+                                    <p className="text-xs font-bold text-black dark:text-white">{formatCurrency(bal)}</p>
+                                    <p className="text-[9px] text-gray-400">{pct.toFixed(1)}%</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* TOP SPENDING CATEGORIES */}
+                        {expenseByCategory.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Top Spending — {selectedMonth}</p>
+                            <div className="space-y-2.5">
+                              {expenseByCategory.slice(0, 5).map((cat, i) => {
+                                const pct = monthlyExpense > 0 ? (cat.value / monthlyExpense) * 100 : 0;
+                                return (
+                                  <div key={cat.name}>
+                                    <div className="flex justify-between items-center mb-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[9px] font-bold text-gray-400 w-3">{i + 1}</span>
+                                        <p className="text-xs font-bold text-black dark:text-white capitalize">{cat.name}</p>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-xs font-bold text-black dark:text-white">{formatCurrency(cat.value)}</p>
+                                        <p className="text-[9px] text-gray-400 w-8 text-right">{pct.toFixed(0)}%</p>
+                                      </div>
+                                    </div>
+                                    <div className="w-full bg-gray-100 dark:bg-gray-800 h-1 overflow-hidden">
+                                      <div className="h-full bg-black dark:bg-white transition-all duration-1000" style={{ width: `${pct}%` }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* BUDGET HEALTH SUMMARY */}
+                        {budgets.length > 0 && (
+                          <div className="border border-gray-200 dark:border-gray-800 p-4 transition-colors duration-300">
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Budget Health</p>
+                            <div className="space-y-2">
+                              {budgets.map(budget => {
+                                const spent = expenseByCategory.find(e => e.name.toLowerCase() === budget.category_name.toLowerCase())?.value || 0;
+                                const pct = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
+                                const isOver = spent > budget.amount;
+                                const isWarn = !isOver && pct > 80;
+                                return (
+                                  <div key={budget.id} className="flex items-center gap-3">
+                                    <p className="text-xs text-black dark:text-white capitalize w-24 truncate shrink-0">{budget.category_name}</p>
+                                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden">
+                                      <div
+                                        className={`h-full transition-all duration-1000 ${isOver ? 'bg-red-600' : isWarn ? 'bg-orange-500' : 'bg-green-600 dark:bg-green-500'}`}
+                                        style={{ width: `${Math.min(100, pct)}%` }}
+                                      />
+                                    </div>
+                                    <span className={`text-[9px] font-bold w-6 text-right shrink-0 ${isOver ? 'text-red-500' : isWarn ? 'text-orange-500' : 'text-gray-400'}`}>
+                                      {isOver ? '!' : isWarn ? '~' : '✓'}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[9px] text-gray-400 mt-3">
+                              {budgets.filter(b => {
+                                const spent = expenseByCategory.find(e => e.name.toLowerCase() === b.category_name.toLowerCase())?.value || 0;
+                                return spent > b.amount;
+                              }).length} over budget · {budgets.filter(b => {
+                                const spent = expenseByCategory.find(e => e.name.toLowerCase() === b.category_name.toLowerCase())?.value || 0;
+                                return spent <= b.amount;
+                              }).length} on track
+                            </p>
+                          </div>
+                        )}
+
+                      </div>
+                    )}
+
+          {/* TAB: RECURRING */}
+          {activeTab === 'Recurring' && (
+            <RecurringPanel accounts={accounts} onTransactionLogged={() => fetchData(false)} />
+          )}
 
           {/* TAB 1: PORTFOLIOS */}
           {activeTab === 'Portfolios' && (
@@ -615,7 +831,7 @@ export default function Dashboard() {
           )}
 
           {/* TRANSACTION FEED (Sembunyikan saat di tab Assets agar fokus) */}
-          {activeTab !== 'Assets' && (
+          {activeTab !== 'Assets' && activeTab !== 'Overview' && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300">
               <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300 mt-10">
                 <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Latest Transactions</h3>

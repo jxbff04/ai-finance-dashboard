@@ -2,6 +2,8 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
+import { ModeProvider } from '@/lib/ModeContext';
+import AppShell from '@/components/AppShell';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -10,19 +12,11 @@ export const metadata: Metadata = {
   description: 'Terminal Manajemen Keuangan',
   manifest: '/manifest.json',
   openGraph: {
-    images: [
-      {
-        url: 'https://bolt.new/static/og_default.png',
-      },
-    ],
+    images: [{ url: 'https://bolt.new/static/og_default.png' }],
   },
   twitter: {
     card: 'summary_large_image',
-    images: [
-      {
-        url: 'https://bolt.new/static/og_default.png',
-      },
-    ],
+    images: [{ url: 'https://bolt.new/static/og_default.png' }],
   },
 };
 
@@ -34,7 +28,11 @@ export default function RootLayout({
   return (
     <html lang="id" className="dark">
       <body className={`${inter.className} bg-[#0A0A0A] text-gray-100 antialiased`}>
-        {children}
+        <ModeProvider>
+          <AppShell>
+            {children}
+          </AppShell>
+        </ModeProvider>
         <Toaster />
       </body>
     </html>
