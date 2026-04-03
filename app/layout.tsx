@@ -48,20 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </AppShell>
         </ModeProvider>
-        <Toaster
-          theme="dark"
-          toastOptions={{
-            style: {
-              background: '#111111',
-              border: '1px solid rgba(255,255,255,0.07)',
-              color: '#EFEFEF',
-              borderRadius: '0',
-              fontSize: '12px',
-              fontFamily: 'var(--font-inter)',
-              letterSpacing: '0.01em',
-            },
-          }}
-        />
+<Toaster />
       </body>
     </html>
   );
