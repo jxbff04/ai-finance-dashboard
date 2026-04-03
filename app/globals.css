@@ -2,90 +2,290 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ─── BLACKJACK DESIGN TOKENS v2 ──────────────────────────────────────────── */
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  /* Base — deep black, unchanged */
+  --bj-base:        #0A0A0A;
+  --bj-surface:     #141414;
+  --bj-elevated:    #1C1C1C;
+  --bj-overlay:     #222222;
+
+  /* Borders — slightly more visible */
+  --bj-border:      rgba(255,255,255,0.09);
+  --bj-border-mid:  rgba(255,255,255,0.15);
+  --bj-border-high: rgba(255,255,255,0.25);
+
+  /* Text — stronger hierarchy */
+  --bj-text-primary:   #F5F5F5;
+  --bj-text-secondary: #A0A0A0;
+  --bj-text-muted:     #606060;
+  --bj-text-inverse:   #0A0A0A;
+
+  /* Accent — Silver (brighter, more alive) */
+  --bj-silver:      #E8E8E8;
+  --bj-silver-dim:  #909090;
+
+  /* Accent — Cold Blue (more saturated, Apple-like) */
+  --bj-blue:        #4DA3E8;
+  --bj-blue-dim:    #2A6090;
+  --bj-blue-glow:   rgba(77,163,232,0.12);
+
+  /* Accent — Emerald (more vivid, visible) */
+  --bj-emerald:     #4CAF85;
+  --bj-emerald-dim: #2D6B51;
+  --bj-emerald-glow: rgba(76,175,133,0.12);
+
+  /* Status — more readable */
+  --bj-profit:      #4CAF85;
+  --bj-loss:        #E05C5C;
+  --bj-warning:     #D4943A;
+
+  /* Transitions */
+  --bj-transition:      200ms ease-out;
+  --bj-transition-slow: 400ms ease-out;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+/* ─── BASE RESET ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-  }
+body {
+  background-color: var(--bj-base);
+  color: var(--bj-text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+/* ─── TYPOGRAPHY ──────────────────────────────────────────────────────────── */
+.font-display {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  letter-spacing: -0.02em;
 }
 
-/* Menyembunyikan wujud scrollbar secara global tapi tetap bisa digeser */
-* {
-  scrollbar-width: none; /* Untuk browser Firefox */
-  -ms-overflow-style: none; /* Untuk IE dan Edge */
+.font-mono-data {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
-*::-webkit-scrollbar {
-  display: none; /* Untuk Chrome, Safari, dan Opera */
+
+/* ─── COMPONENT CLASSES ───────────────────────────────────────────────────── */
+
+.bj-card {
+  background-color: var(--bj-surface);
+  border: 1px solid var(--bj-border);
+  transition: border-color var(--bj-transition), background-color var(--bj-transition);
 }
+
+.bj-card:hover {
+  border-color: var(--bj-border-mid);
+  background-color: var(--bj-elevated);
+}
+
+.bj-card-elevated {
+  background-color: var(--bj-elevated);
+  border: 1px solid var(--bj-border);
+}
+
+.bj-divider {
+  height: 1px;
+  background: var(--bj-border);
+  width: 100%;
+}
+
+.bj-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bj-text-muted);
+  font-family: 'Inter', sans-serif;
+}
+
+.bj-value {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.bj-hero-number {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+  color: var(--bj-text-primary);
+}
+
+/* Buttons */
+.bj-btn {
+  background: var(--bj-silver);
+  color: var(--bj-text-inverse);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border: none;
+  cursor: pointer;
+  transition: all var(--bj-transition);
+}
+
+.bj-btn:hover { background: #FFFFFF; }
+.bj-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.bj-btn-ghost {
+  background: transparent;
+  color: var(--bj-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border: 1px solid var(--bj-border-mid);
+  cursor: pointer;
+  transition: all var(--bj-transition);
+}
+
+.bj-btn-ghost:hover {
+  border-color: var(--bj-border-high);
+  color: var(--bj-text-primary);
+}
+
+/* Tabs */
+.bj-tab {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--bj-text-muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--bj-transition);
+  white-space: nowrap;
+}
+
+.bj-tab:hover { color: var(--bj-text-secondary); }
+
+.bj-tab-active {
+  color: var(--bj-text-primary);
+  border-bottom-color: var(--bj-blue);
+}
+
+/* Progress bars */
+.bj-progress {
+  height: 2px;
+  background: rgba(255,255,255,0.08);
+  width: 100%;
+  overflow: hidden;
+}
+
+.bj-progress-fill { height: 100%; transition: width var(--bj-transition-slow); }
+.bj-progress-fill-profit  { background: var(--bj-profit); }
+.bj-progress-fill-blue    { background: var(--bj-blue); }
+.bj-progress-fill-silver  { background: var(--bj-silver-dim); }
+.bj-progress-fill-loss    { background: var(--bj-loss); }
+.bj-progress-fill-warning { background: var(--bj-warning); }
+
+/* Input */
+.bj-input {
+  background: var(--bj-surface);
+  border: 1px solid var(--bj-border-mid);
+  color: var(--bj-text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  padding: 10px 12px;
+  width: 100%;
+  outline: none;
+  transition: border-color var(--bj-transition);
+  border-radius: 0;
+}
+
+.bj-input:focus { border-color: var(--bj-blue); }
+.bj-input::placeholder { color: var(--bj-text-muted); font-size: 12px; }
+
+/* Status colors */
+.bj-profit  { color: var(--bj-profit); }
+.bj-loss    { color: var(--bj-loss); }
+.bj-blue    { color: var(--bj-blue); }
+.bj-silver  { color: var(--bj-silver); }
+.bj-emerald { color: var(--bj-emerald); }
+.bj-warning { color: var(--bj-warning); }
+
+/* Pill */
+.bj-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  border: 1px solid var(--bj-border-mid);
+  color: var(--bj-text-secondary);
+}
+
+/* Row hover */
+.bj-row {
+  transition: background var(--bj-transition);
+}
+.bj-row:hover { background: rgba(255,255,255,0.03); }
+
+/* Glow effects */
+.bj-glow-blue    { box-shadow: 0 0 24px var(--bj-blue-glow); }
+.bj-glow-emerald { box-shadow: 0 0 24px var(--bj-emerald-glow); }
+
+/* ─── SCROLLBAR ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* ─── SELECTION ───────────────────────────────────────────────────────────── */
+::selection { background: var(--bj-blue); color: #fff; }
+
+/* ─── ANIMATIONS ──────────────────────────────────────────────────────────── */
+@keyframes bj-deal {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bj-emerge {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bj-pulse-slow {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+@keyframes bj-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.bj-deal   { animation: bj-deal 280ms ease-out forwards; }
+.bj-emerge { animation: bj-emerge 380ms ease-out forwards; }
+
+.bj-deal-1 { animation: bj-deal 280ms ease-out 60ms  forwards; opacity: 0; }
+.bj-deal-2 { animation: bj-deal 280ms ease-out 120ms forwards; opacity: 0; }
+.bj-deal-3 { animation: bj-deal 280ms ease-out 180ms forwards; opacity: 0; }
+.bj-deal-4 { animation: bj-deal 280ms ease-out 240ms forwards; opacity: 0; }
+.bj-deal-5 { animation: bj-deal 280ms ease-out 300ms forwards; opacity: 0; }
+
+.bj-pulse { animation: bj-pulse-slow 2s ease-in-out infinite; }
+
+/* ─── UTILITIES ───────────────────────────────────────────────────────────── */
+.no-spinner::-webkit-inner-spin-button,
+.no-spinner::-webkit-outer-spin-button { appearance: none; }
+.no-spinner { -moz-appearance: textfield; }
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

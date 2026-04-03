@@ -464,250 +464,326 @@ export default function Dashboard() {
 
   useEffect(() => { chatScrollRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, chatStatus, showAIAssistant]);
   
-  if (loading) return <div className="min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center"><Loader2 className="h-6 w-6 text-black dark:text-white animate-spin" /></div>;
+   if (loading) return (
+    <div style={{ minHeight: '100vh', background: '#0A0A0A', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+      <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '32px', fontWeight: 300, color: '#F5F5F5', letterSpacing: '-0.01em' }}>Blackjack</p>
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#4DA3E8', animation: 'bj-pulse-slow 1.4s ease-in-out infinite', animationDelay: `${i * 0.2}s` }} />
+        ))}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] dark:bg-[#050505] flex justify-center text-black dark:text-gray-100 font-sans transition-colors duration-300 selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black">
-      
-      <div className="w-full max-w-md bg-white dark:bg-[#0a0a0a] min-h-screen relative flex flex-col border-x border-gray-300 dark:border-gray-800 overflow-x-hidden shadow-sm transition-colors duration-300">
+    <div className="min-h-screen flex justify-center" style={{ background: '#0A0A0A' }}>
+      <div className="w-full max-w-md min-h-screen relative flex flex-col overflow-x-hidden" style={{ background: '#0A0A0A', borderLeft: '1px solid rgba(255,255,255,0.04)', borderRight: '1px solid rgba(255,255,255,0.04)' }}>
         
-        {/* HEADER */}
-        <header className="sticky top-0 z-30 bg-black dark:bg-[#000000] flex flex-col transition-colors duration-300">
-          <div className="px-5 pt-6 pb-4 flex items-center justify-between">
-            <h1 className="text-3xl font-sans font-bold tracking-tighter text-white leading-none">
+        {/* HEADER — Luxury Noir */}
+        <header className="sticky top-0 z-30 flex flex-col" style={{ background: '#0A0A0A', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+
+          {/* Top bar — brand + actions */}
+          <div className="px-5 pt-5 pb-4 flex items-center justify-between">
+            <h1 style={{
+              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              fontSize: '28px',
+              fontWeight: 300,
+              letterSpacing: '-0.01em',
+              color: '#EFEFEF',
+              lineHeight: 1,
+            }}>
               Blackjack
             </h1>
-            <div className="flex gap-3 items-center">
-              <button onClick={() => fetchData(false)} className={cn("p-1.5 rounded-full text-white hover:bg-gray-800 transition-all", isRefreshing && "animate-spin")}>
-                <RefreshCw className="w-4 h-4" />
-              </button>
+            <div className="flex gap-2 items-center">
               {mode === 'private' && (
-                <button onClick={() => setChangePinOpen(true)} className="p-1.5 rounded-full text-white hover:bg-gray-800 transition-colors">
+                <button onClick={() => setChangePinOpen(true)}
+                  className="transition-colors duration-200"
+                  style={{ padding: '6px', color: '#4A4A4A', background: 'none', border: 'none', cursor: 'pointer' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8A8A8A'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#4A4A4A'; }}
+                >
                   <ShieldCheck className="w-4 h-4" />
                 </button>
               )}
-              <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1.5 rounded-full text-white hover:bg-gray-800 transition-colors">
-                {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              <button
+                onClick={() => fetchData(false)}
+                style={{ padding: '6px', color: '#4A4A4A', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 200ms ease-out' }}
+                className={cn(isRefreshing && 'animate-spin')}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8A8A8A'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#4A4A4A'; }}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
               </button>
-              <Button size="sm" onClick={() => { setTransactionDialogInitialType('expense'); setTransactionDialogOpen(true); }} className="h-7 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-none border-0 uppercase transition-colors">
-                + New Entry
-              </Button>
+              <button
+                onClick={() => { setTransactionDialogInitialType('expense'); setTransactionDialogOpen(true); }}
+                style={{
+                  padding: '6px 14px',
+                  background: '#4DA3E8  ',
+                  color: '#FFFFFF',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase', 
+                  fontFamily: 'Inter, sans-serif',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background 200ms ease-out',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#6DB8F0'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#C6C6C6'; }}
+              >
+                + Entry
+              </button>
             </div>
-          </div>
-          
-          {/* TICKER TAPE BAR - TOTAL ASSETS */}
-          <div className="bg-white dark:bg-[#050505] border-b border-gray-300 dark:border-gray-800 px-5 py-2 flex items-center overflow-x-auto scrollbar-hide gap-3 shadow-sm transition-colors duration-300">
-             <div className="flex gap-2 shrink-0 items-center">
-               <span className="bg-black dark:bg-white dark:text-black text-white px-2 py-0.5 text-[10px] font-bold transition-colors duration-300">TOTAL ASSETS</span>
-               <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(grandTotalAssets)}</span>
-             </div>
-             <div className="flex gap-2 shrink-0 items-center ml-1">
-               <span className="bg-blue-600 text-white px-2 py-0.5 text-[10px] font-bold transition-colors duration-300">INVESTMENTS</span>
-               <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(totalInvestments)}</span>
-             </div>
-             <div className="flex gap-2 shrink-0 items-center ml-1">
-               <span className="bg-green-600 text-white px-2 py-0.5 text-[10px] font-bold flex items-center">INFLOW <TrendingUp className="w-3 h-3 ml-1" /></span>
-               <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300">{formatCurrency(monthlyIncome)}</span>
-             </div>
-             <div className="flex gap-2 shrink-0 items-center ml-1">
-               <span className="bg-[#cc0000] text-white px-2 py-0.5 text-[10px] font-bold flex items-center">OUTFLOW <TrendingDown className="w-3 h-3 ml-1" /></span>
-               <span className="text-[10px] font-bold text-black dark:text-white transition-colors duration-300 pr-4">{formatCurrency(monthlyExpense)}</span>
-             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#050505] px-5 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-800 transition-colors duration-300">
-            <div className="flex gap-4 text-xs font-medium text-gray-800 dark:text-gray-400 uppercase tracking-wider">
-              Terminal Overview
+          {/* Data strip — key metrics in one line */}
+          <div
+            className="px-5 py-2 flex items-center gap-5 overflow-x-auto scrollbar-hide"
+            style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+          >
+            <div className="flex flex-col shrink-0">
+              <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>Assets</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: '#EFEFEF', fontFamily: "'SF Mono', monospace", letterSpacing: '0.01em' }}>{formatCurrency(grandTotalAssets)}</span>
             </div>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="h-6 w-auto border-0 shadow-none bg-transparent text-xs font-bold text-black dark:text-white p-0 focus:ring-0 focus:ring-offset-0 transition-colors duration-300">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="border-gray-300 dark:border-gray-800 bg-white dark:bg-[#0a0a0a] text-black dark:text-white rounded-none">
-                {monthOptions.map(o => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+            <div className="flex flex-col shrink-0">
+              <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>Invest</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: '#4DA3E8', fontFamily: "'SF Mono', monospace", letterSpacing: '0.01em' }}>{formatCurrency(totalInvestments)}</span>
+            </div>
+            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+            <div className="flex flex-col shrink-0">
+              <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>In</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: '#4CAF85', fontFamily: "'SF Mono', monospace", letterSpacing: '0.01em' }}>+{formatCurrency(monthlyIncome)}</span>
+            </div>
+            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+            <div className="flex flex-col shrink-0">
+              <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>Out</span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: '#E05C5C', fontFamily: "'SF Mono', monospace", letterSpacing: '0.01em' }}>-{formatCurrency(monthlyExpense)}</span>
+            </div>
+            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+            <div className="flex flex-col shrink-0 ml-auto">
+              <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>Period</span>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="h-auto border-0 shadow-none bg-transparent p-0 focus:ring-0 focus:ring-offset-0" style={{ fontSize: '12px', fontWeight: 500, color: '#8A8A8A', fontFamily: "'SF Mono', monospace" }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 0 }}>
+                  {monthOptions.map(o => <SelectItem key={o.value} value={o.value} style={{ fontSize: '11px' }}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-6 pb-32 space-y-10">
           
-          <div className="border-b border-black dark:border-gray-700 pb-2 animate-in fade-in slide-in-from-bottom-2 duration-500 transition-colors duration-300">
-             <h2 className="text-4xl font-serif font-black tracking-tight text-black dark:text-white mb-1 transition-colors duration-300">Markets</h2>
-             <div className="flex gap-5 text-xs font-medium text-gray-600 dark:text-gray-400 mt-4 transition-colors duration-300 overflow-x-auto pb-1">
-               {['Overview', 'Portfolios', 'Budgets', 'Targets', 'Assets', 'Recurring'].map((tab) => (
-                 <span key={tab} onClick={() => setActiveTab(tab as ActiveTab)} className={cn("cursor-pointer pb-1 border-b-2 whitespace-nowrap uppercase transition-all duration-300", activeTab === tab ? "border-black dark:border-white text-black dark:text-white font-bold" : "border-transparent hover:text-black dark:hover:text-white")}>{tab}</span>
-               ))}
-             </div>
+          {/* PAGE HEADER + TABS */}
+          <div className="bj-deal bj-deal-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '16px' }}>
+            <h2 style={{
+              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              fontSize: '42px',
+              fontWeight: 300,
+              letterSpacing: '-0.02em',
+              color: '#EFEFEF',
+              lineHeight: 1,
+              marginBottom: '20px',
+            }}>
+              Markets
+            </h2>
+
+            {/* Tab navigation */}
+            <div className="flex gap-6 overflow-x-auto scrollbar-hide" style={{ paddingBottom: '1px' }}>
+              {(['Overview', 'Portfolios', 'Budgets', 'Targets', 'Assets', ...(isGuest ? [] : ['Recurring'])] as string[]).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab as ActiveTab)}
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'Inter, sans-serif',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: activeTab === tab ? '1px solid #4DA3E8' : '1px solid transparent',
+                    color: activeTab === tab ? '#F5F5F5' : '#606060',
+                    paddingBottom: '8px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 200ms ease-out',
+                  }}
+                  onMouseEnter={e => {
+                    if (activeTab !== tab) (e.currentTarget as HTMLElement).style.color = '#8A8A8A';
+                  }}
+                  onMouseLeave={e => {
+                    if (activeTab !== tab) (e.currentTarget as HTMLElement).style.color = '#4A4A4A';
+                  }}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* TAB 0: OVERVIEW */}
-                    {activeTab === 'Overview' && (
-                      <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6">
+          {activeTab === 'Overview' && (
+            <div className="bj-deal space-y-5">
 
-                        {/* NET WORTH CARD */}
-                        <div className="border border-black dark:border-gray-700 p-4 transition-colors duration-300">
-                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Total Net Worth</p>
-                          <p className="text-4xl font-serif font-black text-black dark:text-white leading-none tracking-tight">
-                            {formatCurrency(grandTotalAssets)}
-                          </p>
-                          <div className="flex gap-4 mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
-                            <div>
-                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Liquid</p>
-                              <p className="text-sm font-bold text-black dark:text-white">{formatCurrency(totalLiquidNetWorth)}</p>
-                            </div>
-                            <div className="w-px bg-gray-200 dark:bg-gray-800" />
-                            <div>
-                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Investments</p>
-                              <p className="text-sm font-bold text-blue-600 dark:text-blue-400">{formatCurrency(totalInvestments)}</p>
-                            </div>
-                            <div className="w-px bg-gray-200 dark:bg-gray-800" />
-                            <div>
-                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Invest %</p>
-                              <p className="text-sm font-bold text-black dark:text-white">
-                                {grandTotalAssets > 0 ? ((totalInvestments / grandTotalAssets) * 100).toFixed(1) : '0'}%
-                              </p>
-                            </div>
-                          </div>
+              {/* NET WORTH — Hero */}
+              <div className="bj-deal-1" style={{ padding: '20px', background: '#141414', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '8px' }}>Total Net Worth</p>
+                <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '52px', fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1, color: '#F5F5F5' }}>
+                  {formatCurrency(grandTotalAssets)}
+                </p>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '16px 0' }} />
+                <div style={{ display: 'flex', gap: '24px' }}>
+                  <div>
+                    <p style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif' }}>Liquid</p>
+                    <p style={{ fontSize: '13px', fontWeight: 500, color: '#F5F5F5', fontFamily: "'SF Mono', monospace", marginTop: '3px' }}>{formatCurrency(totalLiquidNetWorth)}</p>
+                  </div>
+                  <div style={{ width: '1px', background: 'rgba(255,255,255,0.07)' }} />
+                  <div>
+                    <p style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif' }}>Investments</p>
+                    <p style={{ fontSize: '13px', fontWeight: 500, color: '#4DA3E8', fontFamily: "'SF Mono', monospace", marginTop: '3px' }}>{formatCurrency(totalInvestments)}</p>
+                  </div>
+                  <div style={{ width: '1px', background: 'rgba(255,255,255,0.07)' }} />
+                  <div>
+                    <p style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif' }}>Invest %</p>
+                    <p style={{ fontSize: '13px', fontWeight: 500, color: '#F5F5F5', fontFamily: "'SF Mono', monospace", marginTop: '3px' }}>
+                      {grandTotalAssets > 0 ? ((totalInvestments / grandTotalAssets) * 100).toFixed(1) : '0'}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* MONTHLY CASHFLOW */}
+              <div className="bj-deal-2" style={{ padding: '20px', background: '#141414', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif' }}>Monthly Cashflow</p>
+                  <p style={{ fontSize: '9px', color: '#606060', fontFamily: "'SF Mono', monospace" }}>{selectedMonth}</p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <p style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif' }}>Income</p>
+                    <p style={{ fontSize: '18px', fontWeight: 500, color: '#4CAF85', fontFamily: "'Cormorant Garamond', serif", marginTop: '4px' }}>{formatCurrency(monthlyIncome)}</p>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif' }}>Expense</p>
+                    <p style={{ fontSize: '18px', fontWeight: 500, color: '#E05C5C', fontFamily: "'Cormorant Garamond', serif", marginTop: '4px' }}>{formatCurrency(monthlyExpense)}</p>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif' }}>Net</p>
+                    <p style={{ fontSize: '18px', fontWeight: 500, color: monthlyIncome - monthlyExpense >= 0 ? '#4CAF85' : '#E05C5C', fontFamily: "'Cormorant Garamond', serif", marginTop: '4px' }}>
+                      {monthlyIncome - monthlyExpense >= 0 ? '+' : ''}{formatCurrency(monthlyIncome - monthlyExpense)}
+                    </p>
+                  </div>
+                </div>
+                {monthlyIncome > 0 && (
+                  <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <p style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif' }}>Savings Rate</p>
+                      <p style={{ fontSize: '11px', fontWeight: 600, color: '#A0A0A0', fontFamily: "'SF Mono', monospace" }}>
+                        {Math.max(0, ((monthlyIncome - monthlyExpense) / monthlyIncome) * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                    <div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', width: '100%', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${Math.min(100, Math.max(0, ((monthlyIncome - monthlyExpense) / monthlyIncome) * 100))}%`,
+                        background: ((monthlyIncome - monthlyExpense) / monthlyIncome) >= 0.2 ? '#4CAF85' : '#D4943A',
+                        transition: 'width 600ms ease-out',
+                      }} />
+                    </div>
+                    <p style={{ fontSize: '9px', color: '#606060', fontFamily: 'Inter, sans-serif', marginTop: '6px' }}>
+                      {((monthlyIncome - monthlyExpense) / monthlyIncome) >= 0.2 ? '↑ On track — above 20% target' : '↓ Below 20% savings target'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* WALLET BREAKDOWN */}
+              <div className="bj-deal-3">
+                <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '14px' }}>Wallet Breakdown</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {accounts.map(acc => {
+                    const bal = toNumber(acc.balance);
+                    const pct = totalLiquidNetWorth > 0 ? (bal / totalLiquidNetWorth) * 100 : 0;
+                    return (
+                      <div key={acc.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '72px', flexShrink: 0 }}>
+                          <p style={{ fontSize: '12px', fontWeight: 500, color: '#F5F5F5', fontFamily: 'Inter, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</p>
+                          <p style={{ fontSize: '9px', color: '#606060', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Inter, sans-serif' }}>{acc.type}</p>
                         </div>
-
-                        {/* MONTHLY CASHFLOW CARD */}
-                        <div className="border border-gray-200 dark:border-gray-800 p-4 transition-colors duration-300">
-                          <div className="flex justify-between items-start mb-3">
-                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Monthly Cashflow</p>
-                            <span className="text-[10px] font-bold text-gray-400 uppercase">{selectedMonth}</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div className="space-y-1">
-                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Income</p>
-                              <p className="text-base font-bold text-green-600 dark:text-green-500">{formatCurrency(monthlyIncome)}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Expense</p>
-                              <p className="text-base font-bold text-red-600 dark:text-red-400">{formatCurrency(monthlyExpense)}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Net</p>
-                              <p className={`text-base font-bold ${monthlyIncome - monthlyExpense >= 0 ? 'text-black dark:text-white' : 'text-red-600 dark:text-red-400'}`}>
-                                {monthlyIncome - monthlyExpense >= 0 ? '+' : ''}{formatCurrency(monthlyIncome - monthlyExpense)}
-                              </p>
-                            </div>
-                          </div>
-                          {/* Savings Rate Bar */}
-                          {monthlyIncome > 0 && (
-                            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-                              <div className="flex justify-between items-center mb-1.5">
-                                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Savings Rate</p>
-                                <p className="text-[10px] font-bold text-black dark:text-white">
-                                  {Math.max(0, ((monthlyIncome - monthlyExpense) / monthlyIncome) * 100).toFixed(1)}%
-                                </p>
-                              </div>
-                              <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden">
-                                <div
-                                  className={`h-full transition-all duration-1000 ${((monthlyIncome - monthlyExpense) / monthlyIncome) >= 0.2 ? 'bg-green-600 dark:bg-green-500' : 'bg-orange-500'}`}
-                                  style={{ width: `${Math.min(100, Math.max(0, ((monthlyIncome - monthlyExpense) / monthlyIncome) * 100))}%` }}
-                                />
-                              </div>
-                              <p className="text-[9px] text-gray-400 mt-1">{((monthlyIncome - monthlyExpense) / monthlyIncome) >= 0.2 ? '✓ On track — saving above 20%' : '⚠ Below 20% savings target'}</p>
-                            </div>
-                          )}
+                        <div style={{ flex: 1, height: '2px', background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${Math.max(0, pct)}%`, background: '#4DA3E8', transition: 'width 600ms ease-out' }} />
                         </div>
-
-                        {/* WALLET BREAKDOWN */}
-                        <div>
-                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Wallet Breakdown</p>
-                          <div className="space-y-2">
-                            {accounts.map(acc => {
-                              const bal = toNumber(acc.balance);
-                              const pct = totalLiquidNetWorth > 0 ? (bal / totalLiquidNetWorth) * 100 : 0;
-                              return (
-                                <div key={acc.id} className="flex items-center gap-3">
-                                  <div className="w-20 shrink-0">
-                                    <p className="text-xs font-bold text-black dark:text-white truncate">{acc.name}</p>
-                                    <p className="text-[9px] text-gray-400 uppercase">{acc.type}</p>
-                                  </div>
-                                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden">
-                                    <div className="h-full bg-black dark:bg-white transition-all duration-1000" style={{ width: `${Math.max(0, pct)}%` }} />
-                                  </div>
-                                  <div className="w-20 text-right shrink-0">
-                                    <p className="text-xs font-bold text-black dark:text-white">{formatCurrency(bal)}</p>
-                                    <p className="text-[9px] text-gray-400">{pct.toFixed(1)}%</p>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                        <div style={{ width: '80px', textAlign: 'right', flexShrink: 0 }}>
+                          <p style={{ fontSize: '11px', fontWeight: 500, color: '#F5F5F5', fontFamily: "'SF Mono', monospace" }}>{formatCurrency(bal)}</p>
+                          <p style={{ fontSize: '9px', color: '#606060', fontFamily: 'Inter, sans-serif' }}>{pct.toFixed(1)}%</p>
                         </div>
-
-                        {/* TOP SPENDING CATEGORIES */}
-                        {expenseByCategory.length > 0 && (
-                          <div>
-                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Top Spending — {selectedMonth}</p>
-                            <div className="space-y-2.5">
-                              {expenseByCategory.slice(0, 5).map((cat, i) => {
-                                const pct = monthlyExpense > 0 ? (cat.value / monthlyExpense) * 100 : 0;
-                                return (
-                                  <div key={cat.name}>
-                                    <div className="flex justify-between items-center mb-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[9px] font-bold text-gray-400 w-3">{i + 1}</span>
-                                        <p className="text-xs font-bold text-black dark:text-white capitalize">{cat.name}</p>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-xs font-bold text-black dark:text-white">{formatCurrency(cat.value)}</p>
-                                        <p className="text-[9px] text-gray-400 w-8 text-right">{pct.toFixed(0)}%</p>
-                                      </div>
-                                    </div>
-                                    <div className="w-full bg-gray-100 dark:bg-gray-800 h-1 overflow-hidden">
-                                      <div className="h-full bg-black dark:bg-white transition-all duration-1000" style={{ width: `${pct}%` }} />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* BUDGET HEALTH SUMMARY */}
-                        {budgets.length > 0 && (
-                          <div className="border border-gray-200 dark:border-gray-800 p-4 transition-colors duration-300">
-                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Budget Health</p>
-                            <div className="space-y-2">
-                              {budgets.map(budget => {
-                                const spent = expenseByCategory.find(e => e.name.toLowerCase() === budget.category_name.toLowerCase())?.value || 0;
-                                const pct = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
-                                const isOver = spent > budget.amount;
-                                const isWarn = !isOver && pct > 80;
-                                return (
-                                  <div key={budget.id} className="flex items-center gap-3">
-                                    <p className="text-xs text-black dark:text-white capitalize w-24 truncate shrink-0">{budget.category_name}</p>
-                                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden">
-                                      <div
-                                        className={`h-full transition-all duration-1000 ${isOver ? 'bg-red-600' : isWarn ? 'bg-orange-500' : 'bg-green-600 dark:bg-green-500'}`}
-                                        style={{ width: `${Math.min(100, pct)}%` }}
-                                      />
-                                    </div>
-                                    <span className={`text-[9px] font-bold w-6 text-right shrink-0 ${isOver ? 'text-red-500' : isWarn ? 'text-orange-500' : 'text-gray-400'}`}>
-                                      {isOver ? '!' : isWarn ? '~' : '✓'}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <p className="text-[9px] text-gray-400 mt-3">
-                              {budgets.filter(b => {
-                                const spent = expenseByCategory.find(e => e.name.toLowerCase() === b.category_name.toLowerCase())?.value || 0;
-                                return spent > b.amount;
-                              }).length} over budget · {budgets.filter(b => {
-                                const spent = expenseByCategory.find(e => e.name.toLowerCase() === b.category_name.toLowerCase())?.value || 0;
-                                return spent <= b.amount;
-                              }).length} on track
-                            </p>
-                          </div>
-                        )}
-
                       </div>
-                    )}
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* TOP SPENDING */}
+              {expenseByCategory.length > 0 && (
+                <div className="bj-deal-4">
+                  <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '14px' }}>Top Spending</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {expenseByCategory.slice(0, 5).map((cat, i) => {
+                      const pct = monthlyExpense > 0 ? (cat.value / monthlyExpense) * 100 : 0;
+                      return (
+                        <div key={cat.name}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '9px', color: '#606060', fontFamily: "'SF Mono', monospace", width: '12px' }}>{i + 1}</span>
+                              <p style={{ fontSize: '12px', fontWeight: 500, color: '#F5F5F5', fontFamily: 'Inter, sans-serif', textTransform: 'capitalize' }}>{cat.name}</p>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <p style={{ fontSize: '11px', fontWeight: 500, color: '#A0A0A0', fontFamily: "'SF Mono', monospace" }}>{formatCurrency(cat.value)}</p>
+                              <p style={{ fontSize: '9px', color: '#606060', fontFamily: 'Inter, sans-serif', width: '28px', textAlign: 'right' }}>{pct.toFixed(0)}%</p>
+                            </div>
+                          </div>
+                          <div style={{ height: '2px', background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: '#E05C5C', opacity: 0.6 + (i * 0.08), transition: 'width 600ms ease-out' }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* BUDGET HEALTH */}
+              {budgets.length > 0 && (
+                <div className="bj-deal-5" style={{ padding: '20px', background: '#141414', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '14px' }}>Budget Health</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {budgets.map(budget => {
+                      const spent = expenseByCategory.find(e => e.name.toLowerCase() === budget.category_name.toLowerCase())?.value || 0;
+                      const pct = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
+                      const isOver = spent > budget.amount;
+                      const isWarn = !isOver && pct > 80;
+                      return (
+                        <div key={budget.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <p style={{ fontSize: '11px', color: '#A0A0A0', fontFamily: 'Inter, sans-serif', width: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, textTransform: 'capitalize' }}>{budget.category_name}</p>
+                          <div style={{ flex: 1, height: '2px', background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: isOver ? '#E05C5C' : isWarn ? '#D4943A' : '#4CAF85', transition: 'width 600ms ease-out' }} />
+                          </div>
+                          <span style={{ fontSize: '9px', color: isOver ? '#E05C5C' : isWarn ? '#D4943A' : '#606060', fontFamily: "'SF Mono', monospace", width: '16px', flexShrink: 0 }}>
+                            {isOver ? '!' : isWarn ? '~' : '✓'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* TAB: RECURRING */}
           {activeTab === 'Recurring' && (
@@ -716,85 +792,131 @@ export default function Dashboard() {
 
           {/* TAB 1: PORTFOLIOS */}
           {activeTab === 'Portfolios' && (
-            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100">
-              <div className="grid grid-cols-2 gap-4">
-                {accounts.map((acc) => {
-                  const isSelected = txFilter.accountId === acc.id;
-                  return (
-                    <div key={acc.id} onClick={() => setTxFilter({ type: 'all', accountId: acc.id })} className={cn('cursor-pointer border-t border-b py-3 transition-all duration-300 relative group', isSelected ? 'border-black dark:border-white bg-gray-50 dark:bg-gray-900' : 'border-gray-200 dark:border-gray-800 hover:border-black dark:hover:border-gray-500')}>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{acc.type}</p>
-                      <p className="text-sm font-serif font-bold text-black dark:text-white truncate leading-tight mb-2 transition-colors duration-300">{acc.name}</p>
-                      <div className="flex justify-between items-center">
-                        <p className="text-xs font-bold text-black dark:text-gray-200 transition-colors duration-300">{formatCurrency(toNumber(acc.balance))}</p>
-                        <button onClick={(e) => { e.stopPropagation(); setSelectedAccount(acc); setInputValue(String(toNumber(acc.balance))); setEditBalanceOpen(true); }} className="text-gray-400 hover:text-blue-600 transition-colors">
+            <div className="bj-deal space-y-3">
+              {accounts.map((acc, i) => {
+                const isSelected = txFilter.accountId === acc.id;
+                return (
+                  <div
+                    key={acc.id}
+                    onClick={() => setTxFilter({ type: 'all', accountId: acc.id })}
+                    className={`bj-deal-${Math.min(i + 1, 5)}`}
+                    style={{
+                      padding: '16px',
+                      background: isSelected ? '#1C1C1C' : '#141414',
+                      border: `1px solid ${isSelected ? '#4DA3E8' : 'rgba(255,255,255,0.08)'}`,
+                      cursor: 'pointer',
+                      transition: 'all 200ms ease-out',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: isSelected ? '#4DA3E8' : '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '4px' }}>{acc.type}</p>
+                        <p style={{ fontSize: '16px', fontWeight: 400, color: '#F5F5F5', fontFamily: "'Cormorant Garamond', Georgia, serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                        <p style={{ fontSize: '14px', fontWeight: 500, color: '#F5F5F5', fontFamily: "'SF Mono', monospace" }}>{formatCurrency(toNumber(acc.balance))}</p>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelectedAccount(acc); setInputValue(String(toNumber(acc.balance))); setEditBalanceOpen(true); }}
+                          style={{ color: '#606060', background: 'none', border: 'none', cursor: 'pointer', padding: '4px', transition: 'color 200ms ease-out' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#4DA3E8'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#606060'; }}
+                        >
                           <Pencil className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
           {/* TAB 2: BUDGETS */}
           {activeTab === 'Budgets' && (
-            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
-              <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
-                <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Spending Limits</h3>
-                <button onClick={() => setBudgetDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300 uppercase">+ Add Limit</button>
+            <div className="bj-deal">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5' }}>Spending Limits</p>
+                <button onClick={() => setBudgetDialogOpen(true)} style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4DA3E8', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>+ Add</button>
               </div>
-              <div className="space-y-4">
-                {budgets.length > 0 ? budgets.map(budget => {
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {budgets.length > 0 ? budgets.map((budget, i) => {
                   const spent = expenseByCategory.find(e => e.name.toLowerCase() === budget.category_name.toLowerCase())?.value || 0;
                   const percentage = Math.min((spent / budget.amount) * 100, 100);
                   const isOver = spent > budget.amount;
+                  const isWarn = !isOver && percentage > 80;
                   return (
-                    <div key={budget.id} className="group relative border-b border-gray-200 dark:border-gray-800 pb-3 transition-colors duration-300">
-                      <button onClick={() => confirmDelete('budget', budget.id)} className="absolute top-0 right-0 text-red-500/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-[#0a0a0a] pl-2"><Trash2 className="w-3.5 h-3.5" /></button>
-                      <div className="flex justify-between items-end mb-2">
-                        <p className="text-sm font-serif font-bold text-black dark:text-white capitalize transition-colors duration-300">{budget.category_name}</p>
-                        <p className={`text-xs font-bold ${isOver ? 'text-[#cc0000] dark:text-red-400' : 'text-gray-800 dark:text-gray-300'} transition-colors duration-300`}>{formatCurrency(spent)} <span className="text-gray-400 dark:text-gray-500 font-normal">/ {formatCurrency(budget.amount)}</span></p>
+                    <div key={budget.id} className={`bj-deal-${Math.min(i + 1, 5)} group`} style={{ paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'relative' }}>
+                      <button
+                        onClick={() => confirmDelete('budget', budget.id)}
+                        style={{ position: 'absolute', top: 0, right: 0, color: '#606060', background: 'none', border: 'none', cursor: 'pointer', opacity: 0, transition: 'all 200ms', padding: '2px' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#E05C5C'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#606060'; }}
+                        className="group-hover:opacity-100"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
+                        <p style={{ fontSize: '14px', fontWeight: 400, color: '#F5F5F5', fontFamily: "'Cormorant Garamond', Georgia, serif", textTransform: 'capitalize' }}>{budget.category_name}</p>
+                        <p style={{ fontSize: '11px', fontFamily: "'SF Mono', monospace", color: isOver ? '#E05C5C' : '#A0A0A0' }}>
+                          {formatCurrency(spent)} <span style={{ color: '#606060' }}>/ {formatCurrency(budget.amount)}</span>
+                        </p>
                       </div>
-                      <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden transition-colors duration-300">
-                        <div className={`h-full transition-all duration-1000 ${isOver ? 'bg-[#cc0000] dark:bg-red-500' : percentage > 80 ? 'bg-orange-500' : 'bg-green-600 dark:bg-green-500'}`} style={{ width: `${percentage}%` }}></div>
+                      <div style={{ height: '2px', background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${percentage}%`, background: isOver ? '#E05C5C' : isWarn ? '#D4943A' : '#4CAF85', transition: 'width 600ms ease-out' }} />
                       </div>
                     </div>
-                  )
-                }) : (<p className="text-sm text-gray-500 italic">No spending limits set.</p>)}
+                  );
+                }) : (
+                  <p style={{ fontSize: '12px', color: '#606060', fontFamily: 'Inter, sans-serif', fontStyle: 'italic' }}>No spending limits set.</p>
+                )}
               </div>
             </div>
           )}
 
           {/* TAB 3: TARGETS */}
           {activeTab === 'Targets' && (
-            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-200">
-              <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300">
-                <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Financial Targets</h3>
-                <button onClick={() => setGoalDialogOpen(true)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-300 uppercase">+ New Target</button>
+            <div className="bj-deal">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5' }}>Financial Targets</p>
+                <button onClick={() => setGoalDialogOpen(true)} style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4DA3E8', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>+ New</button>
               </div>
-              <div className="space-y-4">
-                {goals.length > 0 ? goals.map(goal => {
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {goals.length > 0 ? goals.map((goal, i) => {
                   const percentage = Math.min((toNumber(goal.current_amount) / toNumber(goal.target_amount)) * 100, 100);
+                  const isDone = percentage >= 100;
                   return (
-                    <div key={goal.id} className="group relative border border-gray-200 dark:border-gray-800 p-3 transition-colors duration-300">
-                      <div className="flex justify-between items-center mb-2 border-b border-gray-100 dark:border-gray-800 pb-2">
-                        <p className="text-sm font-serif font-bold text-black dark:text-white capitalize pr-6 transition-colors duration-300">{goal.name}</p>
-                        <div className="flex items-center gap-3">
-                          <button onClick={() => { setSelectedGoal(goal); setInputValue(''); setFundGoalOpen(true); }} className="text-gray-500 hover:text-blue-600 flex items-center gap-1 text-[10px] font-bold uppercase transition-colors"><PlusCircle className="w-3 h-3"/> Fund</button>
-                          <button onClick={() => confirmDelete('goal', goal.id)} className="text-red-500/50 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <div key={goal.id} className={`bj-deal-${Math.min(i + 1, 5)}`} style={{ padding: '16px', background: '#141414', border: `1px solid ${isDone ? 'rgba(76,175,133,0.3)' : 'rgba(255,255,255,0.08)'}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <p style={{ fontSize: '16px', fontWeight: 400, color: '#F5F5F5', fontFamily: "'Cormorant Garamond', Georgia, serif", textTransform: 'capitalize', flex: 1, paddingRight: '12px' }}>{goal.name}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                          <button
+                            onClick={() => { setSelectedGoal(goal); setInputValue(''); setFundGoalOpen(true); }}
+                            style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: '#4DA3E8', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <PlusCircle className="w-3 h-3" /> Fund
+                          </button>
+                          <button
+                            onClick={() => confirmDelete('goal', goal.id)}
+                            style={{ color: '#606060', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 200ms' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#E05C5C'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#606060'; }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex justify-between items-end mb-1">
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide transition-colors duration-300">{formatCurrency(toNumber(goal.current_amount))} of {formatCurrency(toNumber(goal.target_amount))}</p>
-                        <p className="text-xs font-bold text-gray-800 dark:text-gray-300 transition-colors duration-300">{percentage.toFixed(0)}%</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <p style={{ fontSize: '11px', color: '#606060', fontFamily: "'SF Mono', monospace" }}>{formatCurrency(toNumber(goal.current_amount))} <span style={{ color: '#404040' }}>of</span> {formatCurrency(toNumber(goal.target_amount))}</p>
+                        <p style={{ fontSize: '12px', fontWeight: 600, color: isDone ? '#4CAF85' : '#A0A0A0', fontFamily: "'SF Mono', monospace" }}>{percentage.toFixed(0)}%</p>
                       </div>
-                      <div className="w-full bg-gray-100 dark:bg-gray-800 h-1.5 overflow-hidden transition-colors duration-300">
-                        <div className="h-full bg-black dark:bg-white transition-all duration-1000" style={{ width: `${percentage}%` }}></div>
+                      <div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${percentage}%`, background: isDone ? '#4CAF85' : '#4DA3E8', transition: 'width 800ms ease-out' }} />
                       </div>
                     </div>
-                  )
-                }) : (<p className="text-sm text-gray-500 italic">No targets set.</p>)}
+                  );
+                }) : (
+                  <p style={{ fontSize: '12px', color: '#606060', fontFamily: 'Inter, sans-serif', fontStyle: 'italic' }}>No targets set.</p>
+                )}
               </div>
             </div>
           )}
@@ -852,21 +974,32 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TRANSACTION FEED (Sembunyikan saat di tab Assets agar fokus) */}
+          {/* TRANSACTION FEED */}
           {activeTab !== 'Assets' && activeTab !== 'Overview' && (
-            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300">
-              <div className="flex items-center justify-between mb-4 border-b border-black dark:border-gray-700 pb-1 transition-colors duration-300 mt-10">
-                <h3 className="text-lg font-serif font-bold text-black dark:text-white transition-colors duration-300">Latest Transactions</h3>
-                {isFilterActive && (<button className="text-[10px] font-bold text-gray-500 hover:text-black dark:hover:text-white uppercase transition-colors duration-300" onClick={() => setTxFilter({ type: 'all', accountId: 'all' })}>Clear Filter</button>)}
+            <div className="bj-deal" style={{ marginTop: '32px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5' }}>Transactions</p>
+                {isFilterActive && (
+                  <button
+                    onClick={() => setTxFilter({ type: 'all', accountId: 'all' })}
+                    style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+                  >
+                    Clear Filter
+                  </button>
+                )}
               </div>
 
-              <div className="space-y-6">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 {groupedTransactions.map(([dateKey, txs]) => (
                   <div key={dateKey}>
-                    <h4 className="text-xs font-bold text-black dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-800 pb-1 transition-colors duration-300">{formatDateForGrouping(dateKey)}</h4>
-                    <div className="space-y-3">
+                    <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
+                      {formatDateForGrouping(dateKey)}
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                       {txs.map((tx) => {
-                        const amt = toNumber(tx.amount); const isInc = tx.type === 'income';
+                        const amt = toNumber(tx.amount);
+                        const isInc = tx.type === 'income';
+                        const isTransfer = tx.type === 'transfer';
                         return (
                           <SwipeableTransaction
                             key={tx.id}
@@ -884,14 +1017,24 @@ export default function Dashboard() {
                             }}
                             onDelete={() => confirmDelete('transaction', tx.id)}
                           >
-                            <div className="flex items-start justify-between hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors -mx-2 px-2 py-1">
-                              <div className="min-w-0 flex-1 pr-3">
-                                <p className="text-sm font-serif font-bold text-black dark:text-white truncate transition-colors duration-300">{tx.notes || 'Unnamed Transaction'}</p>
-                                <p className="text-[10px] font-medium text-gray-500 uppercase mt-0.5">{tx.category} • {tx.accounts?.name}</p>
+                            <div className="bj-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 8px', margin: '0 -8px' }}>
+                              <div style={{ flex: 1, minWidth: 0, paddingRight: '12px' }}>
+                                <p style={{ fontSize: '13px', fontWeight: 400, color: '#F5F5F5', fontFamily: "'Cormorant Garamond', Georgia, serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {tx.notes || 'Unnamed'}
+                                </p>
+                                <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginTop: '2px' }}>
+                                  {tx.category} · {tx.accounts?.name}
+                                </p>
                               </div>
-                              <div className="flex flex-col items-end shrink-0">
-                                <p className={`font-sans text-sm font-bold transition-colors duration-300 ${isInc ? 'text-green-600 dark:text-green-500' : 'text-black dark:text-white'}`}>{isInc ? '+' : ''}{formatCurrency(amt)}</p>
-                              </div>
+                              <p style={{
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                color: isInc ? '#4CAF85' : isTransfer ? '#4DA3E8' : '#F5F5F5',
+                                fontFamily: "'SF Mono', monospace",
+                                flexShrink: 0,
+                              }}>
+                                {isInc ? '+' : isTransfer ? '↔' : '-'}{formatCurrency(Math.abs(amt))}
+                              </p>
                             </div>
                           </SwipeableTransaction>
                         );
@@ -899,7 +1042,9 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
-                {filteredTransactions.length === 0 && (<p className="text-sm text-gray-500 italic">No transactions found for this period.</p>)}
+                {filteredTransactions.length === 0 && (
+                  <p style={{ fontSize: '12px', color: '#606060', fontFamily: 'Inter, sans-serif', fontStyle: 'italic' }}>No transactions found.</p>
+                )}
               </div>
             </div>
           )}
@@ -907,39 +1052,87 @@ export default function Dashboard() {
 
         {/* FLOATING AI BUTTON */}
         <div className="fixed bottom-6 right-6 sm:right-auto sm:translate-x-44 z-40">
-           <Button onClick={() => setShowAIAssistant(true)} className="h-14 w-14 rounded-none bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 shadow-2xl border border-gray-700 dark:border-gray-200 transition-colors duration-300">
-             <MessageSquare className="h-6 w-6" />
-           </Button>
+          <button
+            onClick={() => setShowAIAssistant(true)}
+            style={{ width: 52, height: 52, background: '#141414', border: '1px solid rgba(255,255,255,0.12)', color: '#4DA3E8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', transition: 'all 200ms ease-out' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#4DA3E8'; (e.currentTarget as HTMLElement).style.background = '#1C1C1C'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLElement).style.background = '#141414'; }}
+          >
+            <MessageSquare className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* AI CHAT MODAL - FIXED FOCUS & AUTO-SCROLL (Masalah #2) */}
+        {/* AI CHAT MODAL */}
         {showAIAssistant && (
-          <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-sm sm:p-4">
-            <div className="w-full max-w-md mx-auto h-[90dvh] sm:h-[85dvh] bg-white dark:bg-[#0a0a0a] border border-gray-300 dark:border-gray-800 flex flex-col shadow-2xl transition-colors duration-300">
-              
-              {/* Header Chat */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center shrink-0 bg-gray-50 dark:bg-black transition-colors duration-300">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-600 animate-pulse"></div>
-                  <h3 className="text-sm font-serif font-bold text-black dark:text-white transition-colors duration-300 uppercase">BLACKJACK AI</h3>
+          <div className="fixed inset-0 z-50 flex flex-col justify-end" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+            <div className="w-full max-w-md mx-auto flex flex-col shadow-2xl" style={{ height: '88dvh', background: '#0A0A0A', borderTop: '1px solid rgba(255,255,255,0.10)', borderLeft: '1px solid rgba(255,255,255,0.06)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+
+              {/* Chat Header */}
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: '#111111' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: chatBusy ? '#D4943A' : '#4CAF85' }} className={chatBusy ? 'bj-pulse' : ''} />
+                  <div>
+                    <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '18px', fontWeight: 400, color: '#F5F5F5', lineHeight: 1 }}>Blackjack AI</p>
+                    <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginTop: '2px' }}>
+                      {chatBusy ? 'Processing...' : 'Finance Assistant'}
+                    </p>
+                  </div>
                 </div>
-                <button onClick={() => setShowAIAssistant(false)} className="text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors duration-300 uppercase">Close</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <button
+                    onClick={() => setChatMessages([])}
+                    style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase', color: '#606060', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'color 200ms' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#A0A0A0'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#606060'; }}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={() => setShowAIAssistant(false)}
+                    style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase', color: '#606060', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'color 200ms' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#F5F5F5'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#606060'; }}
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
-              
-              {/* Area Pesan Chat */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-white dark:bg-[#0a0a0a] transition-colors duration-300">
+
+              {/* Messages */}
+              <div className="scrollbar-hide" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {chatMessages.length === 0 && (
+                  <div style={{ textAlign: 'center', paddingTop: '40px' }}>
+                    <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '28px', fontWeight: 300, color: '#2A2A2A', marginBottom: '8px' }}>How can I help?</p>
+                    <p style={{ fontSize: '11px', color: '#404040', fontFamily: 'Inter, sans-serif', lineHeight: 1.6 }}>
+                      Log transactions, check balances,<br />or ask for financial insights.
+                    </p>
+                  </div>
+                )}
                 {chatMessages.map((m) => {
                   const text = getMessageText(m);
                   const mAny = m as any;
                   const hasTool = mAny.toolInvocations && mAny.toolInvocations.length > 0;
                   if (!text && !hasTool) return null;
+                  const isUser = m.role === 'user';
                   return (
-                    <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed transition-colors duration-300 ${m.role === 'user' ? 'bg-black dark:bg-white text-white dark:text-black rounded-none' : 'bg-gray-100 dark:bg-[#111] text-black dark:text-gray-200 border border-gray-200 dark:border-gray-800 rounded-none font-serif'}`}>
-                      {text && <p className="whitespace-pre-wrap">{renderBoldMarkdown(text)}</p>}
+                    <div key={m.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+                      <div style={{
+                        maxWidth: '85%',
+                        padding: '10px 14px',
+                        background: isUser ? '#4DA3E8' : '#141414',
+                        border: isUser ? 'none' : '1px solid rgba(255,255,255,0.07)',
+                        color: isUser ? '#fff' : '#E0E0E0',
+                        fontSize: isUser ? '13px' : '13px',
+                        fontFamily: isUser ? 'Inter, sans-serif' : "'Cormorant Garamond', Georgia, serif",
+                        lineHeight: 1.6,
+                      }}>
+                        {text && <p style={{ whiteSpace: 'pre-wrap' }}>{renderBoldMarkdown(text)}</p>}
                         {hasTool && mAny.toolInvocations?.map((tool: any) => (
-                          <div key={tool.toolCallId} className="mt-3 flex flex-col gap-1 border-t border-gray-300 dark:border-gray-700 pt-3 transition-colors duration-300">
-                            {tool.state === 'result' ? (<span className="text-green-700 dark:text-green-500 font-bold text-[10px] uppercase flex items-center gap-1">✓ Database Synced</span>) : (<span className="text-blue-600 dark:text-blue-400 font-bold text-[10px] uppercase flex items-center gap-2 animate-pulse"><Loader2 className="w-3 h-3 animate-spin"/> Executing...</span>)}
+                          <div key={tool.toolCallId} style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.10)' }}>
+                            {tool.state === 'result'
+                              ? <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: '#4CAF85', fontFamily: 'Inter, sans-serif' }}>✓ Synced</span>
+                              : <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: '#D4943A', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '6px' }}><Loader2 className="w-3 h-3 animate-spin" /> Processing</span>
+                            }
                           </div>
                         ))}
                       </div>
@@ -947,123 +1140,213 @@ export default function Dashboard() {
                   );
                 })}
                 {chatStatus === 'submitted' && (
-                  <div className="flex justify-start animate-in fade-in duration-300">
-                    <div className="bg-gray-100 dark:bg-[#111] px-4 py-3 rounded-none border border-gray-200 dark:border-gray-800 flex items-center gap-2 transition-colors duration-300">
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                    <div style={{ padding: '12px 16px', background: '#141414', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      {[0, 1, 2].map(i => (
+                        <div key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#4A4A4A', animation: 'bj-pulse-slow 1.2s ease-in-out infinite', animationDelay: `${i * 0.2}s` }} />
+                      ))}
                     </div>
                   </div>
                 )}
-                {/* Penanda Akhir Scroll */}
-                <div ref={chatScrollRef} className="h-1"></div>
+                <div ref={chatScrollRef} style={{ height: 1 }} />
               </div>
-              
-              {/* Form Input Chat */}
-              <form className="p-3 bg-white dark:bg-[#0a0a0a] border-t border-gray-200 dark:border-gray-800 flex gap-2 shrink-0 transition-colors duration-300" onSubmit={(e) => { e.preventDefault(); if (input.trim() && !chatBusy) { sendMessage({ text: input }); setInput(''); } }}>
-                <Textarea 
+
+              {/* Input */}
+              <form
+                style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', gap: '8px', flexShrink: 0, background: '#111111' }}
+                onSubmit={(e) => { e.preventDefault(); if (input.trim() && !chatBusy) { sendMessage({ text: input }); setInput(''); } }}
+              >
+                <textarea
                   autoFocus
-                  value={input} 
-                  onChange={(e) => setInput(e.target.value)} 
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (input.trim() && !chatBusy) { sendMessage({ text: input }); setInput(''); }
-                    }
-                  }}
-                  disabled={chatBusy} 
-                  className="min-h-[44px] max-h-[120px] py-3 bg-gray-50 dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white placeholder:text-gray-400 font-serif transition-colors duration-300 resize-none" 
-                  placeholder="Enter command (Shift+Enter for new line)..." 
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (input.trim() && !chatBusy) { sendMessage({ text: input }); setInput(''); } } }}
+                  disabled={chatBusy}
+                  placeholder="Ask anything or log a transaction..."
+                  rows={1}
+                  style={{ flex: 1, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '14px', padding: '10px 12px', outline: 'none', resize: 'none', lineHeight: 1.5, borderRadius: 0 }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }}
                 />
-                <Button type="submit" disabled={chatBusy || !input.trim()} className="h-11 px-6 bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black rounded-none font-bold uppercase shrink-0 transition-colors duration-300">Send</Button>
+                <button
+                  type="submit"
+                  disabled={chatBusy || !input.trim()}
+                  style={{ padding: '10px 18px', background: input.trim() && !chatBusy ? '#4DA3E8' : '#1C1C1C', border: 'none', color: input.trim() && !chatBusy ? '#fff' : '#3A3A3A', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: input.trim() && !chatBusy ? 'pointer' : 'not-allowed', transition: 'all 200ms', flexShrink: 0 }}
+                >
+                  Send
+                </button>
               </form>
             </div>
           </div>
         )}
 
-        {/* MODAL INPUT ANGKA (Edit Balance / Fund Target) dengan Spinner Dihilangkan */}
+        {/* EDIT BALANCE / FUND GOAL */}
         <Dialog open={editBalanceOpen || fundGoalOpen} onOpenChange={(isOpen) => { setEditBalanceOpen(isOpen); setFundGoalOpen(isOpen); }}>
-          <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none p-6 shadow-xl transition-colors duration-300">
-            <div className="space-y-4">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-serif font-black text-black dark:text-white border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">
-                  {editBalanceOpen ? 'Update Balance' : 'Add Funds'}
-                </DialogTitle>
-                <DialogDescription className="text-sm text-gray-600 dark:text-gray-400 pt-3 font-medium transition-colors duration-300">
-                  {editBalanceOpen ? `Set exact balance for ${selectedAccount?.name}` : `Top up progress for ${selectedGoal?.name}`}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Amount (IDR)</label>
-                {/* CSS hack disematkan ke className */}
-                <Input type="number" autoFocus value={inputValue} onChange={(e) => setInputValue(e.target.value)} className={cn("bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300", NO_SPINNER_CLASS)} />
-              </div>
-              <div className="flex gap-3 w-full pt-4">
-                <Button variant="outline" className="flex-1 rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors duration-300" onClick={() => { setEditBalanceOpen(false); setFundGoalOpen(false); }}>Cancel</Button>
-                <Button onClick={editBalanceOpen ? handleUpdateBalance : handleFundGoal} className="flex-1 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors duration-300 uppercase">{editBalanceOpen ? 'Update' : 'Add'}</Button>
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+            <div style={{ padding: '24px' }}>
+              <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '4px' }}>
+                {editBalanceOpen ? selectedAccount?.name : selectedGoal?.name}
+              </p>
+              <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5', marginBottom: '20px' }}>
+                {editBalanceOpen ? 'Update Balance' : 'Add Funds'}
+              </p>
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '20px' }} />
+              <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '8px' }}>Amount (IDR)</label>
+              <input
+                type="number"
+                autoFocus
+                value={inputValue}
+                onChange={e => setInputValue(e.target.value)}
+                className="no-spinner"
+                style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '28px', fontWeight: 300, padding: '10px 12px', outline: 'none', marginBottom: '20px', borderRadius: 0 }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+                onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }}
+              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => { setEditBalanceOpen(false); setFundGoalOpen(false); }}
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={editBalanceOpen ? handleUpdateBalance : handleFundGoal}
+                  style={{ flex: 1, padding: '10px', background: '#4DA3E8', border: 'none', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  {editBalanceOpen ? 'Update' : 'Add Funds'}
+                </button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* Modal Tambah & Edit Aset Investasi */}
+        {/* ASSET DIALOG */}
         <Dialog open={assetDialogOpen || editAssetOpen} onOpenChange={(isOpen) => { setAssetDialogOpen(isOpen); setEditAssetOpen(isOpen); }}>
-          <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none p-6 shadow-xl transition-colors duration-300">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-serif font-black text-black dark:text-white border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">
-                {editAssetOpen ? 'Update Asset' : 'Track Asset'}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wide">Ticker Symbol (Yahoo Finance)</label>
-                <Input placeholder="e.g., BBCA.JK, AAPL, BTC-USD" value={assetSymbol} onChange={(e) => setAssetSymbol(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white uppercase" />
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+            <div style={{ padding: '24px' }}>
+              <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5', marginBottom: '20px' }}>
+                {editAssetOpen ? 'Edit Asset' : 'Track Asset'}
+              </p>
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '20px' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Ticker Symbol</label>
+                  <input value={assetSymbol} onChange={e => setAssetSymbol(e.target.value)} placeholder="e.g. BBCA.JK, BTC-USD, GC=F"
+                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'SF Mono', monospace", fontSize: '14px', padding: '10px 12px', outline: 'none', borderRadius: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
+                  <p style={{ fontSize: '9px', color: '#606060', fontFamily: 'Inter, sans-serif', marginTop: '4px' }}>Source: Yahoo Finance · Auto-converted to IDR</p>
+                </div>
+                <div>
+                  <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Units Owned</label>
+                  <input type="number" value={assetUnits} onChange={e => setAssetUnits(e.target.value)} placeholder="e.g. 100 or 0.5" className="no-spinner"
+                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '24px', fontWeight: 300, padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase text-gray-500 tracking-wide">Number of Units Owned</label>
-                <Input type="number" placeholder="e.g., 100 or 0.5" value={assetUnits} onChange={(e) => setAssetUnits(e.target.value)} className={cn("bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white", NO_SPINNER_CLASS)} />
-              </div>
-              <div className="flex gap-3 w-full pt-4">
-                <Button variant="outline" className="flex-1 rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors duration-300" onClick={() => { setAssetDialogOpen(false); setEditAssetOpen(false); }}>Cancel</Button>
-                <Button onClick={editAssetOpen ? handleEditAsset : handleAddAsset} className="flex-1 rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase">{editAssetOpen ? 'Update' : 'Track'}</Button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => { setAssetDialogOpen(false); setEditAssetOpen(false); }}
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={editAssetOpen ? handleEditAsset : handleAddAsset}
+                  style={{ flex: 1, padding: '10px', background: '#4DA3E8', border: 'none', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  {editAssetOpen ? 'Update' : 'Track'}
+                </button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* POP-UP KONFIRMASI HAPUS */}
+        {/* DELETE CONFIRM */}
         <Dialog open={deleteConfirm.isOpen} onOpenChange={(isOpen) => setDeleteConfirm(prev => ({ ...prev, isOpen }))}>
-          <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none p-6 shadow-xl transition-colors duration-300">
-            <div className="space-y-4">
-              <DialogHeader><DialogTitle className="text-xl font-serif font-black text-black dark:text-white border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">Confirm</DialogTitle></DialogHeader>
-              <div className="flex gap-3 w-full pt-4">
-                <Button variant="outline" className="flex-1 rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-white font-bold hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors duration-300" onClick={() => setDeleteConfirm({ isOpen: false, type: null, id: null })}>Cancel</Button>
-                <Button onClick={executeDelete} disabled={isDeleting} className="flex-1 rounded-none bg-[#cc0000] dark:bg-red-600 hover:bg-red-800 dark:hover:bg-red-700 text-white font-bold transition-colors duration-300 uppercase">Delete</Button>
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+            <div style={{ padding: '24px' }}>
+              <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5', marginBottom: '8px' }}>Confirm Delete</p>
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '16px' }} />
+              <p style={{ fontSize: '12px', color: '#8A8A8A', fontFamily: 'Inter, sans-serif', lineHeight: 1.6, marginBottom: '24px' }}>
+                This action <span style={{ color: '#E05C5C' }}>cannot be undone</span>. Balance will be restored automatically.
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setDeleteConfirm({ isOpen: false, type: null, id: null })}
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={executeDelete} disabled={isDeleting}
+                  style={{ flex: 1, padding: '10px', background: '#E05C5C', border: 'none', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: isDeleting ? 'not-allowed' : 'pointer', opacity: isDeleting ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  {isDeleting && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* MODAL TAMBAH BUDGET */}
+        {/* ADD BUDGET */}
         <Dialog open={budgetDialogOpen} onOpenChange={setBudgetDialogOpen}>
-          <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none shadow-xl transition-colors duration-300">
-            <DialogHeader><DialogTitle className="text-xl font-serif font-black border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">New Limit</DialogTitle></DialogHeader>
-            <div className="space-y-5 pt-3">
-              <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Category</label><Input value={newBudgetCategory} onChange={(e) => setNewBudgetCategory(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300" /></div>
-              <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Amount (IDR)</label><Input type="number" value={newBudgetAmount} onChange={(e) => setNewBudgetAmount(e.target.value)} className={cn("bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300", NO_SPINNER_CLASS)} /></div>
-              <Button onClick={handleAddBudget} className="w-full rounded-none bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black font-bold mt-2 transition-colors duration-300 uppercase">Save</Button>
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+            <div style={{ padding: '24px' }}>
+              <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5', marginBottom: '20px' }}>New Spending Limit</p>
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '20px' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Category</label>
+                  <input value={newBudgetCategory} onChange={e => setNewBudgetCategory(e.target.value)} placeholder="e.g. Food, Transport"
+                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: 'Inter, sans-serif', fontSize: '13px', padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Limit Amount (IDR)</label>
+                  <input type="number" value={newBudgetAmount} onChange={e => setNewBudgetAmount(e.target.value)} placeholder="0" className="no-spinner"
+                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '24px', fontWeight: 300, padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setBudgetDialogOpen(false)}
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={handleAddBudget}
+                  style={{ flex: 1, padding: '10px', background: '#4DA3E8', border: 'none', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  Save
+                </button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* MODAL TAMBAH GOAL */}
+        {/* ADD GOAL */}
         <Dialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen}>
-          <DialogContent className="sm:max-w-[350px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none shadow-xl transition-colors duration-300">
-            <DialogHeader><DialogTitle className="text-xl font-serif font-black border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">New Target</DialogTitle></DialogHeader>
-            <div className="space-y-5 pt-3">
-              <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Target Name</label><Input value={newGoalName} onChange={(e) => setNewGoalName(e.target.value)} className="bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300" /></div>
-              <div className="space-y-1.5"><label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide transition-colors duration-300">Target Amount (IDR)</label><Input type="number" value={newGoalTarget} onChange={(e) => setNewGoalTarget(e.target.value)} className={cn("bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white text-sm rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white transition-colors duration-300", NO_SPINNER_CLASS)} /></div>
-              <Button onClick={handleAddGoal} className="w-full rounded-none bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black font-bold mt-2 transition-colors duration-300 uppercase">Save</Button>
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+            <div style={{ padding: '24px' }}>
+              <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5', marginBottom: '20px' }}>New Target</p>
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '20px' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Target Name</label>
+                  <input value={newGoalName} onChange={e => setNewGoalName(e.target.value)} placeholder="e.g. Emergency Fund"
+                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: 'Inter, sans-serif', fontSize: '13px', padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Target Amount (IDR)</label>
+                  <input type="number" value={newGoalTarget} onChange={e => setNewGoalTarget(e.target.value)} placeholder="0" className="no-spinner"
+                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '24px', fontWeight: 300, padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setGoalDialogOpen(false)}
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={handleAddGoal}
+                  style={{ flex: 1, padding: '10px', background: '#4CAF85', border: 'none', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  Save
+                </button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

@@ -9,82 +9,111 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-conic':
-          'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
-      },
-      borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
-      },
+      // ─── BLACKJACK COLOR SYSTEM ──────────────────────────────────────────
       colors: {
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
-        card: {
-          DEFAULT: 'hsl(var(--card))',
-          foreground: 'hsl(var(--card-foreground))',
-        },
-        popover: {
-          DEFAULT: 'hsl(var(--popover))',
-          foreground: 'hsl(var(--popover-foreground))',
-        },
-        primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
-        },
-        secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
-        },
-        muted: {
-          DEFAULT: 'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))',
-        },
-        accent: {
-          DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
-        },
-        destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
-        },
-        border: 'hsl(var(--border))',
-        input: 'hsl(var(--input))',
-        ring: 'hsl(var(--ring))',
-        chart: {
-          '1': 'hsl(var(--chart-1))',
-          '2': 'hsl(var(--chart-2))',
-          '3': 'hsl(var(--chart-3))',
-          '4': 'hsl(var(--chart-4))',
-          '5': 'hsl(var(--chart-5))',
+        bj: {
+          // Base layers
+          base:     '#0A0A0A',
+          surface:  '#111111',
+          elevated: '#181818',
+          overlay:  '#1F1F1F',
+
+          // Accents
+          silver:   '#C6C6C6',
+          'silver-dim': '#7A7A7A',
+
+          blue:     '#8FA3B8',
+          'blue-dim': '#4A6070',
+
+          emerald:  '#5C7F6E',
+          'emerald-dim': '#3A5248',
+
+          // Status
+          profit:   '#6F8F7A',
+          loss:     '#8F6F6F',
+          warning:  '#8F7F5A',
+
+          // Text
+          'text-primary':   '#EFEFEF',
+          'text-secondary': '#8A8A8A',
+          'text-muted':     '#4A4A4A',
+          'text-inverse':   '#0A0A0A',
         },
       },
+
+      // ─── TYPOGRAPHY ──────────────────────────────────────────────────────
+      fontFamily: {
+        display: ['Cormorant Garamond', 'Georgia', 'serif'],
+        sans:    ['Inter', 'system-ui', 'sans-serif'],
+        mono:    ['SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', 'monospace'],
+      },
+
+      fontSize: {
+        'bj-label': ['9px', { letterSpacing: '0.12em', lineHeight: '1.4' }],
+        'bj-body':  ['13px', { lineHeight: '1.5' }],
+        'bj-hero':  ['48px', { letterSpacing: '-0.03em', lineHeight: '0.9' }],
+      },
+
+      // ─── SPACING ─────────────────────────────────────────────────────────
+      spacing: {
+        '18': '4.5rem',
+        '22': '5.5rem',
+      },
+
+      // ─── BORDER RADIUS ───────────────────────────────────────────────────
+      borderRadius: {
+        'bj': '0px', // Blackjack uses zero radius — sharp edges
+      },
+
+      // ─── TRANSITIONS ─────────────────────────────────────────────────────
+      transitionDuration: {
+        'bj': '200ms',
+        'bj-slow': '400ms',
+      },
+
+      transitionTimingFunction: {
+        'bj': 'cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+
+      // ─── ANIMATIONS ──────────────────────────────────────────────────────
       keyframes: {
-        'accordion-down': {
-          from: {
-            height: '0',
-          },
-          to: {
-            height: 'var(--radix-accordion-content-height)',
-          },
+        'bj-deal': {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to:   { opacity: '1', transform: 'translateY(0)' },
         },
-        'accordion-up': {
-          from: {
-            height: 'var(--radix-accordion-content-height)',
-          },
-          to: {
-            height: '0',
-          },
+        'bj-emerge': {
+          from: { opacity: '0', transform: 'translateY(4px)' },
+          to:   { opacity: '1', transform: 'translateY(0)' },
+        },
+        'bj-pulse-slow': {
+          '0%, 100%': { opacity: '1' },
+          '50%':      { opacity: '0.3' },
         },
       },
+
       animation: {
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out',
+        'bj-deal':   'bj-deal 300ms ease-out forwards',
+        'bj-emerge': 'bj-emerge 400ms ease-out forwards',
+        'bj-pulse':  'bj-pulse-slow 2s ease-in-out infinite',
+      },
+
+      // ─── BOX SHADOW ──────────────────────────────────────────────────────
+      boxShadow: {
+        'bj-sm':  '0 2px 8px rgba(0,0,0,0.4)',
+        'bj-md':  '0 4px 20px rgba(0,0,0,0.6)',
+        'bj-lg':  '0 8px 40px rgba(0,0,0,0.8)',
+        'bj-glow-silver':  '0 0 20px rgba(198,198,198,0.08)',
+        'bj-glow-emerald': '0 0 20px rgba(92,127,110,0.12)',
+        'bj-glow-blue':    '0 0 20px rgba(143,163,184,0.10)',
+      },
+
+      // ─── BACKDROP BLUR ───────────────────────────────────────────────────
+      backdropBlur: {
+        'bj': '8px',
       },
     },
   },
   plugins: [require('tailwindcss-animate')],
 };
+
 export default config;

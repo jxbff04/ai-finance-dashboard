@@ -1,18 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sparkles, Calendar as CalendarIcon, Loader2, ArrowRight } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sparkles, Calendar as CalendarIcon, Loader2, ArrowRight, X } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export interface TransactionToEdit {
@@ -36,13 +31,44 @@ interface TransactionDialogProps {
   sessionId?: string | null;
 }
 
-const NO_SPINNER_CLASS =
-  '[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]';
+const inputStyle = {
+  width: '100%',
+  background: '#1C1C1C',
+  border: '1px solid rgba(255,255,255,0.10)',
+  color: '#F5F5F5',
+  fontFamily: 'Inter, sans-serif',
+  fontSize: '13px',
+  padding: '10px 12px',
+  outline: 'none',
+  transition: 'border-color 200ms ease-out',
+  borderRadius: 0,
+};
 
-// ─── SMART LINK (private mode only) ──────────────────────────────────────────
-async function runSmartLink({
-  notes, category_name, amount, type, month,
-}: { notes: string; category_name: string; amount: number; type: string; month: string }) {
+const labelStyle = {
+  fontSize: '9px',
+  fontWeight: 600,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  color: '#606060',
+  fontFamily: 'Inter, sans-serif',
+  marginBottom: '6px',
+  display: 'block',
+};
+
+const selectStyle = {
+  width: '100%',
+  background: '#1C1C1C',
+  border: '1px solid rgba(255,255,255,0.10)',
+  color: '#F5F5F5',
+  fontFamily: 'Inter, sans-serif',
+  fontSize: '13px',
+  padding: '10px 12px',
+  outline: 'none',
+  cursor: 'pointer',
+  borderRadius: 0,
+};
+
+async function runSmartLink({ notes, category_name, amount, type, month }: { notes: string; category_name: string; amount: number; type: string; month: string }) {
   try {
     const [goalsRes, budgetsRes] = await Promise.all([
       supabase.from('goals').select('id, name, current_amount, target_amount'),
@@ -51,45 +77,24 @@ async function runSmartLink({
     const goals = goalsRes.data || [];
     const budgets = budgetsRes.data || [];
     const fmt = (n: number) => new Intl.NumberFormat('id-ID').format(n);
-
     if (goals.length > 0) {
       const keyword = (notes + ' ' + category_name).toLowerCase();
-      let matched: any = goals.find((g: any) =>
-        keyword.includes(g.name.toLowerCase()) ||
-        g.name.toLowerCase().split(' ').some((w: string) => w.length > 3 && keyword.includes(w))
-      );
-      if (!matched) {
-        matched = goals.reduce((prev: any, curr: any) => {
-          const prevPct = Number(prev.current_amount) / Math.max(Number(prev.target_amount), 1);
-          const currPct = Number(curr.current_amount) / Math.max(Number(curr.target_amount), 1);
-          return currPct < prevPct ? curr : prev;
-        });
-      }
+      let matched: any = goals.find((g: any) => keyword.includes(g.name.toLowerCase()) || g.name.toLowerCase().split(' ').some((w: string) => w.length > 3 && keyword.includes(w)));
+      if (!matched) matched = goals.reduce((prev: any, curr: any) => (Number(curr.current_amount) / Math.max(Number(curr.target_amount), 1)) < (Number(prev.current_amount) / Math.max(Number(prev.target_amount), 1)) ? curr : prev);
       if (matched) {
-        const newAmount = Number(matched.current_amount) + Math.abs(amount);
-        const { error } = await supabase.from('goals').update({ current_amount: newAmount }).eq('id', matched.id);
-        if (!error) toast.success(`🎯 ${fmt(Math.abs(amount))} ditambahkan ke goal "${matched.name}"`, { duration: 5000 });
+        const { error } = await supabase.from('goals').update({ current_amount: Number(matched.current_amount) + Math.abs(amount) }).eq('id', matched.id);
+        if (!error) toast.success(`🎯 ${fmt(Math.abs(amount))} → "${matched.name}"`, { duration: 5000 });
       }
     }
-
     if (budgets.length > 0 && type === 'expense') {
       const keyword = (notes + ' ' + category_name).toLowerCase();
-      const matched = budgets.find((b: any) =>
-        keyword.includes(b.category_name.toLowerCase()) ||
-        b.category_name.toLowerCase().split(' ').some((w: string) => w.length > 3 && keyword.includes(w))
-      );
-      if (matched) toast.info(`📊 Transaksi terhitung di budget "${matched.category_name}"`, { duration: 4000 });
+      const matched = budgets.find((b: any) => keyword.includes(b.category_name.toLowerCase()) || b.category_name.toLowerCase().split(' ').some((w: string) => w.length > 3 && keyword.includes(w)));
+      if (matched) toast.info(`📊 Linked to "${matched.category_name}"`, { duration: 4000 });
     }
-  } catch (e: any) {
-    console.error('[smart-link] silent fail:', e.message);
-  }
+  } catch (e: any) { console.error('[smart-link]', e.message); }
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
-export default function TransactionDialog({
-  open, onOpenChange, initialType, accounts, onSubmitted,
-  editTransaction, mode, sessionId,
-}: TransactionDialogProps) {
+export default function TransactionDialog({ open, onOpenChange, initialType, accounts, onSubmitted, editTransaction, mode, sessionId }: TransactionDialogProps) {
   const isEditMode = !!editTransaction;
   const isGuest = mode === 'guest';
 
@@ -104,6 +109,7 @@ export default function TransactionDialog({
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
+  const [dateOpen, setDateOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -113,365 +119,270 @@ export default function TransactionDialog({
         setAmount(String(Math.abs(Number(editTransaction.amount))));
         setNotes(editTransaction.notes || '');
         setAccountId(editTransaction.account_id);
-        setToAccountId('');
-        setAiPrompt('');
+        setToAccountId(''); setAiPrompt('');
         const d = new Date(editTransaction.transaction_date);
         setDate(isNaN(d.getTime()) ? new Date() : d);
-        const matchedCat = categories.find((c: any) =>
-          c.name.toLowerCase() === editTransaction.category.toLowerCase()
-        );
-        setCategoryId(matchedCat ? String(matchedCat.id) : '');
+        fetchCategories().then(cats => {
+          const m = cats.find((c: any) => c.name.toLowerCase() === editTransaction.category.toLowerCase());
+          setCategoryId(m ? String(m.id) : '');
+        });
       } else {
-        setType(initialType);
-        setAmount(''); setNotes(''); setAiPrompt('');
-        setAccountId(''); setCategoryId(''); setToAccountId('');
-        setDate(new Date());
+        setType(initialType); setAmount(''); setNotes(''); setAiPrompt('');
+        setAccountId(''); setCategoryId(''); setToAccountId(''); setDate(new Date());
       }
     }
   }, [open, initialType, isEditMode, editTransaction, isGuest]);
 
-  useEffect(() => {
-    if (type !== 'transfer') setToAccountId('');
-  }, [type]);
+  useEffect(() => { if (type !== 'transfer') setToAccountId(''); }, [type]);
 
-  const fetchCategories = async () => {
+  const fetchCategories = async (): Promise<any[]> => {
     const { data } = await supabase.from('categories').select('*');
-    if (data) setCategories(data);
+    if (data) { setCategories(data); return data; }
+    return [];
   };
 
   const handleAutoFill = async () => {
     if (!aiPrompt.trim()) return;
     setIsLoadingAI(true);
     try {
-      const res = await fetch('/api/parse-transaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: aiPrompt }),
-      });
+      const res = await fetch('/api/parse-transaction', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: aiPrompt }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setType(data.type);
-      setAmount(String(data.amount));
-      setNotes(data.notes);
+      setType(data.type); setAmount(String(data.amount)); setNotes(data.notes);
       if (data.date) setDate(new Date(data.date));
-      if (data.account_name) {
-        const m = accounts.find(a => a.name.toLowerCase().includes(data.account_name.toLowerCase()));
-        if (m) setAccountId(String(m.id));
-      }
-      if (data.category_name && !isGuest) {
-        const m = categories.find(c => c.name.toLowerCase().includes(data.category_name.toLowerCase()));
-        if (m) setCategoryId(String(m.id));
-      }
-      toast.success('Auto-filled successfully.');
-    } catch (err: any) {
-      toast.error(err.message || 'Auto-fill failed.');
-    } finally {
-      setIsLoadingAI(false);
-    }
+      if (data.account_name) { const m = accounts.find(a => a.name.toLowerCase().includes(data.account_name.toLowerCase())); if (m) setAccountId(String(m.id)); }
+      if (data.category_name && !isGuest) { const m = categories.find(c => c.name.toLowerCase().includes(data.category_name.toLowerCase())); if (m) setCategoryId(String(m.id)); }
+      toast.success('Auto-filled.');
+    } catch (err: any) { toast.error(err.message || 'Auto-fill failed.'); }
+    finally { setIsLoadingAI(false); }
   };
 
-  // ── GUEST SUBMIT ─────────────────────────────────────────────────────────
   const handleGuestSubmit = async () => {
-    if (!amount || !accountId || !date) return toast.error('Amount, Account, and Date are required.');
+    if (!amount || !accountId || !date) return toast.error('Fill required fields.');
     setIsSubmitting(true);
     try {
       const absAmount = Math.abs(Number(amount));
-      const dateStr = format(date, 'yyyy-MM-dd');
       const finalAmount = type === 'expense' ? -absAmount : absAmount;
-
-      // Insert ke guest_transactions
-      const { error: txErr } = await supabase.from('guest_transactions').insert({
-        session_id: sessionId,
-        account_id: accountId,
-        amount: finalAmount,
-        type,
-        notes: notes || '',
-        category: type === 'transfer' ? 'Transfer' : 'General',
-        transaction_date: dateStr,
-      });
-      if (txErr) throw txErr;
-
-      // Update saldo guest_accounts
-      const targetAccount = accounts.find(a => String(a.id) === accountId);
-      if (targetAccount) {
-        const newBalance = Number(targetAccount.balance || 0) + finalAmount;
-        await supabase.from('guest_accounts').update({ balance: newBalance }).eq('id', accountId);
-      }
-
-      toast.success('Transaction logged.');
-      onSubmitted();
-      onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to log transaction.');
-    } finally {
-      setIsSubmitting(false);
-    }
+      const { error } = await supabase.from('guest_transactions').insert({ session_id: sessionId, account_id: accountId, amount: finalAmount, type, notes: notes || '', category: 'General', transaction_date: format(date!, 'yyyy-MM-dd') });
+      if (error) throw error;
+      const acc = accounts.find(a => String(a.id) === accountId);
+      if (acc) await supabase.from('guest_accounts').update({ balance: Number(acc.balance || 0) + finalAmount }).eq('id', accountId);
+      toast.success('Logged.'); onSubmitted(); onOpenChange(false);
+    } catch (err: any) { toast.error(err.message || 'Failed.'); }
+    finally { setIsSubmitting(false); }
   };
 
-  // ── EDIT SUBMIT ──────────────────────────────────────────────────────────
   const handleEditSubmit = async () => {
-    if (!amount || !accountId || !date || !editTransaction) return toast.error('Amount, Account, and Date are required.');
+    if (!amount || !accountId || !date || !editTransaction) return toast.error('Fill required fields.');
     setIsSubmitting(true);
     try {
       const absAmount = Math.abs(Number(amount));
-      const dateStr = format(date, 'yyyy-MM-dd');
-      const selectedCategory = categories.find(c => String(c.id) === categoryId);
       const finalAmount = type === 'expense' ? -absAmount : absAmount;
-
-      // Rollback saldo lama
       const oldAmount = Number(editTransaction.amount);
-      const oldAccount = accounts.find(a => String(a.id) === editTransaction.account_id);
-      if (oldAccount) {
-        const { data: freshOld } = await supabase.from('accounts').select('balance').eq('id', oldAccount.id).single();
-        if (freshOld) await supabase.from('accounts').update({ balance: Number(freshOld.balance) - oldAmount }).eq('id', oldAccount.id);
-      }
-
-      // Apply saldo baru
-      const { data: freshNew } = await supabase.from('accounts').select('balance').eq('id', accountId).single();
-      if (freshNew) await supabase.from('accounts').update({ balance: Number(freshNew.balance) + finalAmount }).eq('id', accountId);
-
-      // Update transaksi
-      const { error: updateErr } = await supabase.from('transactions').update({
-        account_id: accountId,
-        category_id: categoryId || null,
-        amount: finalAmount,
-        type,
-        notes,
-        transaction_date: dateStr,
-      }).eq('id', editTransaction.id);
-      if (updateErr) throw updateErr;
-
-      toast.success('Transaction updated.');
-      onSubmitted();
-      onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update transaction.');
-    } finally {
-      setIsSubmitting(false);
-    }
+      const { data: oldAcc } = await supabase.from('accounts').select('balance').eq('id', editTransaction.account_id).single();
+      if (oldAcc) await supabase.from('accounts').update({ balance: Number(oldAcc.balance) - oldAmount }).eq('id', editTransaction.account_id);
+      const { data: newAcc } = await supabase.from('accounts').select('balance').eq('id', accountId).single();
+      if (newAcc) await supabase.from('accounts').update({ balance: Number(newAcc.balance) + finalAmount }).eq('id', accountId);
+      const { error } = await supabase.from('transactions').update({ account_id: accountId, category_id: categoryId || null, amount: finalAmount, type, notes, transaction_date: format(date!, 'yyyy-MM-dd') }).eq('id', editTransaction.id);
+      if (error) throw error;
+      toast.success('Updated.'); onSubmitted(); onOpenChange(false);
+    } catch (err: any) { toast.error(err.message || 'Failed.'); }
+    finally { setIsSubmitting(false); }
   };
 
-  // ── PRIVATE NEW SUBMIT ───────────────────────────────────────────────────
   const handlePrivateSubmit = async () => {
-    if (!amount || !accountId || !date) return toast.error('Amount, Account, and Date are required.');
-    if (type === 'transfer') {
-      if (!toAccountId) return toast.error('Destination account is required.');
-      if (toAccountId === accountId) return toast.error('Source and destination cannot be the same.');
-    }
+    if (!amount || !accountId || !date) return toast.error('Fill required fields.');
+    if (type === 'transfer' && (!toAccountId || toAccountId === accountId)) return toast.error('Select valid destination.');
     setIsSubmitting(true);
     try {
       const absAmount = Math.abs(Number(amount));
-      const dateStr = format(date, 'yyyy-MM-dd');
-      const month = format(date, 'yyyy-MM');
-      const selectedCategory = categories.find(c => String(c.id) === categoryId);
-      const categoryName = selectedCategory?.name || '';
-
+      const dateStr = format(date!, 'yyyy-MM-dd');
+      const month = format(date!, 'yyyy-MM');
+      const categoryName = categories.find(c => String(c.id) === categoryId)?.name || '';
       if (type === 'transfer') {
-        const sourceAccount = accounts.find(a => String(a.id) === accountId);
-        const destAccount = accounts.find(a => String(a.id) === toAccountId);
-        if (!sourceAccount || !destAccount) throw new Error('Account not found.');
-        const transferNote = notes || `Transfer: ${sourceAccount.name} → ${destAccount.name}`;
-        const { error: outErr } = await supabase.from('transactions').insert({ account_id: accountId, category_id: null, amount: -absAmount, type: 'transfer', notes: transferNote, transaction_date: dateStr });
-        if (outErr) throw outErr;
-        const { error: inErr } = await supabase.from('transactions').insert({ account_id: toAccountId, category_id: null, amount: absAmount, type: 'transfer', notes: transferNote, transaction_date: dateStr });
-        if (inErr) throw inErr;
-        await supabase.from('accounts').update({ balance: Number(sourceAccount.balance || 0) - absAmount }).eq('id', accountId);
-        await supabase.from('accounts').update({ balance: Number(destAccount.balance || 0) + absAmount }).eq('id', toAccountId);
-        toast.success('Transfer logged — both wallets updated!');
-        onSubmitted(); onOpenChange(false);
-        runSmartLink({ notes: transferNote, category_name: 'Transfer', amount: absAmount, type, month });
+        const src = accounts.find(a => String(a.id) === accountId);
+        const dst = accounts.find(a => String(a.id) === toAccountId);
+        if (!src || !dst) throw new Error('Account not found.');
+        const note = notes || `Transfer: ${src.name} → ${dst.name}`;
+        await supabase.from('transactions').insert({ account_id: accountId, category_id: null, amount: -absAmount, type: 'transfer', notes: note, transaction_date: dateStr });
+        await supabase.from('transactions').insert({ account_id: toAccountId, category_id: null, amount: absAmount, type: 'transfer', notes: note, transaction_date: dateStr });
+        await supabase.from('accounts').update({ balance: Number(src.balance || 0) - absAmount }).eq('id', accountId);
+        await supabase.from('accounts').update({ balance: Number(dst.balance || 0) + absAmount }).eq('id', toAccountId);
+        toast.success('Transfer complete.'); onSubmitted(); onOpenChange(false);
+        runSmartLink({ notes: note, category_name: 'Transfer', amount: absAmount, type, month });
       } else {
         const finalAmount = type === 'expense' ? -absAmount : absAmount;
-        const { error: txErr } = await supabase.from('transactions').insert({ account_id: accountId, category_id: categoryId || null, amount: finalAmount, type, notes, transaction_date: dateStr });
-        if (txErr) throw txErr;
-        const targetAccount = accounts.find(a => String(a.id) === accountId);
-        if (targetAccount) await supabase.from('accounts').update({ balance: Number(targetAccount.balance || 0) + finalAmount }).eq('id', accountId);
-        toast.success('Transaction logged.');
-        onSubmitted(); onOpenChange(false);
+        const { error } = await supabase.from('transactions').insert({ account_id: accountId, category_id: categoryId || null, amount: finalAmount, type, notes, transaction_date: dateStr });
+        if (error) throw error;
+        const acc = accounts.find(a => String(a.id) === accountId);
+        if (acc) await supabase.from('accounts').update({ balance: Number(acc.balance || 0) + finalAmount }).eq('id', accountId);
+        toast.success('Logged.'); onSubmitted(); onOpenChange(false);
         runSmartLink({ notes, category_name: categoryName, amount: absAmount, type, month });
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to log transaction.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (err: any) { toast.error(err.message || 'Failed.'); }
+    finally { setIsSubmitting(false); }
   };
 
   const handleSubmit = isEditMode ? handleEditSubmit : isGuest ? handleGuestSubmit : handlePrivateSubmit;
   const isTransfer = type === 'transfer';
+  const submitBg = isEditMode ? '#4DA3E8' : type === 'income' ? '#4CAF85' : type === 'transfer' ? '#4DA3E8' : '#E05C5C';
+  const amountColor = type === 'income' ? '#4CAF85' : type === 'transfer' ? '#4DA3E8' : '#F5F5F5';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-black dark:text-white rounded-none shadow-2xl transition-colors duration-300">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-serif font-black border-b border-black dark:border-white pb-3 transition-colors duration-300 uppercase">
-            {isEditMode ? 'Edit Transaction' : 'New Entry'}
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[400px] p-0 rounded-none border-0 shadow-2xl" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
 
-        <div className="space-y-5 pt-2">
+        {/* Header */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <p style={{ ...labelStyle, marginBottom: '4px' }}>{isEditMode ? 'Edit Entry' : isGuest ? 'Guest Mode' : 'New Entry'}</p>
+            <h2 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '24px', fontWeight: 400, color: '#F5F5F5', lineHeight: 1 }}>
+              {isEditMode ? 'Edit Transaction' : 'Log Transaction'}
+            </h2>
+          </div>
+          <button onClick={() => onOpenChange(false)} style={{ color: '#606060', background: 'none', border: 'none', cursor: 'pointer', padding: '2px', transition: 'color 200ms' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#F5F5F5'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#606060'; }}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
-          {/* AI AUTO-FILL — hanya untuk private mode new entry */}
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '70vh', overflowY: 'auto' }}>
+
+          {/* AI FILL */}
           {!isEditMode && !isGuest && (
-            <div className="space-y-2 bg-gray-50 dark:bg-[#111] p-3 border border-gray-200 dark:border-gray-800">
-              <Textarea
-                placeholder="e.g. Bought lunch for 45k using Gopay..."
-                value={aiPrompt}
-                onChange={e => setAiPrompt(e.target.value)}
-                className="resize-none bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-300 dark:border-gray-700 placeholder:text-gray-400 dark:placeholder:text-gray-600 rounded-none focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white font-serif"
-              />
-              <div className="flex justify-end">
-                <Button size="sm" onClick={handleAutoFill} disabled={isLoadingAI}
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-none border-0 uppercase font-bold text-[10px] tracking-wide h-7">
-                  {isLoadingAI ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Sparkles className="w-3 h-3 mr-2" />}
-                  {isLoadingAI ? 'Processing...' : 'AI AUTO-FILL'}
-                </Button>
+            <div style={{ background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.07)', padding: '12px' }}>
+              <textarea placeholder="e.g. Makan siang 45k pakai Gopay..." value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} rows={2}
+                style={{ width: '100%', background: 'transparent', border: 'none', color: '#A0A0A0', fontFamily: "'Cormorant Garamond', serif", fontSize: '14px', resize: 'none', outline: 'none', lineHeight: 1.5 }} />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                <button onClick={handleAutoFill} disabled={isLoadingAI}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px', background: '#4DA3E8', color: '#fff', fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', border: 'none', cursor: 'pointer', opacity: isLoadingAI ? 0.5 : 1 }}>
+                  {isLoadingAI ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  {isLoadingAI ? 'Processing' : 'AI Fill'}
+                </button>
               </div>
             </div>
           )}
 
-          {/* Guest mode notice */}
-          {isGuest && !isEditMode && (
-            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 p-2.5">
-              <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wide">
-                Guest Mode — transaksi ini akan dihapus saat kamu keluar
-              </p>
-            </div>
-          )}
-
-          {/* TYPE & DATE */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block">Type</label>
-              <Select value={type} onValueChange={(v: any) => setType(v)}>
-                <SelectTrigger className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 rounded-none focus:ring-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-200 dark:border-gray-800 rounded-none">
-                  <SelectItem value="expense">Expense</SelectItem>
-                  <SelectItem value="income">Income</SelectItem>
-                  {!isGuest && <SelectItem value="transfer">Transfer</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5 flex flex-col">
-              <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block">Date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn('w-full justify-start text-left font-normal bg-white dark:bg-[#111] border-gray-300 dark:border-gray-800 text-black dark:text-white rounded-none hover:bg-gray-50 dark:hover:bg-gray-900', !date && 'text-gray-500')}>
-                    <CalendarIcon className="mr-2 h-4 w-4 text-gray-500 shrink-0" />
-                    {date ? format(date, 'd MMM yy', { locale: idLocale }) : 'Pick date'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-white dark:bg-[#111] border-gray-200 dark:border-gray-800 rounded-none">
-                  <Calendar mode="single" selected={date} onSelect={setDate} locale={idLocale} initialFocus className="rounded-none" />
-                </PopoverContent>
-              </Popover>
+          {/* TYPE */}
+          <div>
+            <label style={labelStyle}>Type</label>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {(['expense', 'income', ...(isGuest ? [] : ['transfer'])] as string[]).map(t => {
+                const colors: Record<string, string> = { expense: '#E05C5C', income: '#4CAF85', transfer: '#4DA3E8' };
+                const active = type === t;
+                return (
+                  <button key={t} onClick={() => setType(t as any)}
+                    style={{ flex: 1, padding: '8px', background: active ? colors[t] : 'transparent', border: `1px solid ${active ? colors[t] : 'rgba(255,255,255,0.10)'}`, color: active ? '#fff' : '#606060', fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer', transition: 'all 200ms' }}>
+                    {t}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* AMOUNT */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block">Amount (IDR)</label>
-            <Input type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)}
-              className={cn('bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 placeholder:text-gray-400 focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white rounded-none text-lg font-bold', NO_SPINNER_CLASS)} />
+          <div>
+            <label style={labelStyle}>Amount (IDR)</label>
+            <input type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} className="no-spinner"
+              style={{ ...inputStyle, fontSize: '24px', fontFamily: "'Cormorant Garamond', serif", fontWeight: 300, color: amountColor }}
+              onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
           </div>
 
-          {/* ACCOUNT(S) */}
+          {/* DATE */}
+          <div>
+            <label style={labelStyle}>Date</label>
+            <Popover open={dateOpen} onOpenChange={setDateOpen}>
+              <PopoverTrigger asChild>
+                <button style={{ ...inputStyle, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', textAlign: 'left' }}>
+                  <CalendarIcon style={{ width: 13, height: 13, color: '#606060', flexShrink: 0 }} />
+                  <span style={{ color: date ? '#F5F5F5' : '#606060', fontFamily: 'Inter, sans-serif', fontSize: '13px' }}>
+                    {date ? format(date, 'd MMMM yyyy', { locale: idLocale }) : 'Pick date'}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 rounded-none" style={{ background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.12)' }}>
+                <Calendar mode="single" selected={date} onSelect={d => { setDate(d); setDateOpen(false); }} locale={idLocale} initialFocus />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* ACCOUNTS */}
           {isTransfer && !isGuest ? (
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block">Transfer Route</label>
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
-                  <Select value={accountId} onValueChange={setAccountId}>
-                    <SelectTrigger className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 rounded-none focus:ring-0">
-                      <SelectValue placeholder="From..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-200 dark:border-gray-800 rounded-none max-h-48">
-                      {accounts.map(acc => <SelectItem key={acc.id} value={String(acc.id)} disabled={String(acc.id) === toAccountId}>{acc.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <ArrowRight className="w-4 h-4 text-gray-400 shrink-0" />
-                <div className="flex-1">
-                  <Select value={toAccountId} onValueChange={setToAccountId}>
-                    <SelectTrigger className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 rounded-none focus:ring-0">
-                      <SelectValue placeholder="To..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-200 dark:border-gray-800 rounded-none max-h-48">
-                      {accounts.map(acc => <SelectItem key={acc.id} value={String(acc.id)} disabled={String(acc.id) === accountId}>{acc.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+            <div>
+              <label style={labelStyle}>Transfer Route</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <select value={accountId} onChange={e => setAccountId(e.target.value)} style={selectStyle}>
+                  <option value="">From...</option>
+                  {accounts.map(a => <option key={a.id} value={String(a.id)} disabled={String(a.id) === toAccountId}>{a.name}</option>)}
+                </select>
+                <ArrowRight style={{ width: 14, height: 14, color: '#606060', flexShrink: 0 }} />
+                <select value={toAccountId} onChange={e => setToAccountId(e.target.value)} style={selectStyle}>
+                  <option value="">To...</option>
+                  {accounts.map(a => <option key={a.id} value={String(a.id)} disabled={String(a.id) === accountId}>{a.name}</option>)}
+                </select>
               </div>
               {accountId && toAccountId && amount && (() => {
                 const src = accounts.find(a => String(a.id) === accountId);
                 const dst = accounts.find(a => String(a.id) === toAccountId);
                 const amt = Math.abs(Number(amount));
                 if (!src || !dst) return null;
-                const srcAfter = Number(src.balance || 0) - amt;
-                const dstAfter = Number(dst.balance || 0) + amt;
                 const fmt = (n: number) => new Intl.NumberFormat('id-ID').format(n);
+                const srcAfter = Number(src.balance || 0) - amt;
                 return (
-                  <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-2 text-[10px] text-blue-700 dark:text-blue-300 font-mono">
-                    {src.name}: {fmt(Number(src.balance || 0))} → <strong className={srcAfter < 0 ? 'text-red-500' : ''}>{fmt(srcAfter)}</strong>
-                    {'   |   '}
-                    {dst.name}: {fmt(Number(dst.balance || 0))} → <strong>{fmt(dstAfter)}</strong>
+                  <div style={{ marginTop: '8px', padding: '8px 12px', background: '#1C1C1C', border: '1px solid rgba(77,163,232,0.2)', fontSize: '10px', color: '#606060', fontFamily: "'SF Mono', monospace" }}>
+                    {src.name} <span style={{ color: srcAfter < 0 ? '#E05C5C' : '#4CAF85' }}>{fmt(srcAfter)}</span>
+                    {'  →  '}
+                    {dst.name} <span style={{ color: '#4CAF85' }}>{fmt(Number(dst.balance || 0) + amt)}</span>
                   </div>
                 );
               })()}
             </div>
           ) : (
-            <div className={cn('grid gap-4', !isGuest ? 'grid-cols-2' : 'grid-cols-1')}>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block">Account</label>
-                <Select value={accountId} onValueChange={setAccountId}>
-                  <SelectTrigger className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 rounded-none focus:ring-0">
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-200 dark:border-gray-800 rounded-none max-h-48">
-                    {accounts.map(acc => <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            <div style={{ display: 'grid', gridTemplateColumns: isGuest ? '1fr' : '1fr 1fr', gap: '10px' }}>
+              <div>
+                <label style={labelStyle}>Account</label>
+                <select value={accountId} onChange={e => setAccountId(e.target.value)} style={selectStyle}>
+                  <option value="">Select...</option>
+                  {accounts.map(a => <option key={a.id} value={String(a.id)}>{a.name}</option>)}
+                </select>
               </div>
               {!isGuest && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block">Category</label>
-                  <Select value={categoryId} onValueChange={setCategoryId}>
-                    <SelectTrigger className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 rounded-none focus:ring-0">
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-[#0a0a0a] text-black dark:text-white border-gray-200 dark:border-gray-800 rounded-none max-h-48">
-                      {categories.map(cat => <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div>
+                  <label style={labelStyle}>Category</label>
+                  <select value={categoryId} onChange={e => setCategoryId(e.target.value)} style={selectStyle}>
+                    <option value="">Select...</option>
+                    {categories.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+                  </select>
                 </div>
               )}
             </div>
           )}
 
           {/* NOTES */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-black dark:text-gray-300 uppercase tracking-wide block">Notes</label>
-            <Input
-              placeholder={isTransfer ? 'e.g. Top up GoPay from BCA' : 'Lunch, Coffee, etc.'}
-              value={notes} onChange={e => setNotes(e.target.value)}
-              className="bg-white dark:bg-[#111] text-black dark:text-white border-gray-300 dark:border-gray-800 placeholder:text-gray-400 focus-visible:ring-0 focus-visible:border-black dark:focus-visible:border-white rounded-none"
-            />
+          <div>
+            <label style={labelStyle}>Notes</label>
+            <input type="text" placeholder={isTransfer ? 'e.g. Top up GoPay' : 'e.g. Makan siang'} value={notes} onChange={e => setNotes(e.target.value)}
+              style={inputStyle}
+              onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-2 border-t border-gray-200 dark:border-gray-800 pt-5">
-          <Button variant="outline" onClick={() => onOpenChange(false)}
-            className="rounded-none border-gray-300 dark:border-gray-700 text-black dark:text-gray-300 font-bold hover:bg-gray-100 dark:hover:bg-gray-900">
+        {/* Footer */}
+        <div style={{ padding: '14px 24px', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', gap: '8px' }}>
+          <button onClick={() => onOpenChange(false)}
+            style={{ flex: 1, padding: '11px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer', transition: 'all 200ms' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#F5F5F5'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#A0A0A0'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.10)'; }}>
             Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}
-            className={cn('rounded-none font-bold', isEditMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200')}>
-            {isSubmitting
-              ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Saving...</>
-              : isEditMode ? 'Save Changes' : isTransfer && !isGuest ? 'Execute Transfer' : 'Log Transaction'}
-          </Button>
+          </button>
+          <button onClick={handleSubmit} disabled={isSubmitting}
+            style={{ flex: 2, padding: '11px', background: submitBg, border: 'none', color: '#fff', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'opacity 200ms' }}>
+            {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
+            {isSubmitting ? 'Saving...' : isEditMode ? 'Save Changes' : isTransfer && !isGuest ? 'Execute Transfer' : 'Log Transaction'}
+          </button>
         </div>
       </DialogContent>
     </Dialog>
