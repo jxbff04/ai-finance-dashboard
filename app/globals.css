@@ -8,8 +8,8 @@
 :root {
   /* Base — deep black, unchanged */
   --bj-base:        #0A0A0A;
-  --bj-surface:     #141414;
-  --bj-elevated:    #1C1C1C;
+  --bj-surface:     transparent;
+  --bj-elevated:    transparent;
   --bj-overlay:     #222222;
 
   /* Borders — slightly more visible */
@@ -289,3 +289,46 @@ body {
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── PANEL SEPARATOR ────────────────────────────────────────────────────── */
+/* Garis tipis memudar di ujung kiri dan kanan — memisahkan panel */
+.bj-panel {
+  background: transparent;
+  border: none;
+  position: relative;
+  padding: 20px 0;
+}
+
+.bj-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 20%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.12) 80%,
+    transparent 100%
+  );
+}
+
+.bj-panel::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 20%,
+    rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.12) 80%,
+    transparent 100%
+  );
+}

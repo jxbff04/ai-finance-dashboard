@@ -27,7 +27,7 @@ import { toast } from 'sonner';
 import SplashScreen from '@/components/SplashScreen';
 import GuestBanner from '@/components/GuestBanner';
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 interface Account { id: string; name: string; type: string; balance: string | number | null; currency?: string; }
 interface Transaction { id: string; account_id: string; transaction_date: string; notes: string; category: string; amount: number | string; type: 'income' | 'expense' | 'transfer'; accounts: { name: string; }; }
@@ -97,6 +97,220 @@ function downloadTransactionsCsv(rows: Transaction[], periodLabel: string) {
   const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `transaksi_${periodLabel.replace(/[^\w\-]+/g, '_')}.csv`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
+async function downloadMonthlyPDF(
+  transactions: Transaction[],
+  accounts: { id: string; name: string; type: string; balance: string | number | null }[],
+  budgets: Budget[],
+  goals: Goal[],
+  monthLabel: string,
+  monthlyIncome: number,
+  monthlyExpense: number,
+  grandTotalAssets: number,
+  expenseByCategory: { name: string; value: number }[]
+) {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+ 
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const fmt = (n: number) => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(Math.abs(n)));
+ 
+  // ── HELPER ─────────────────────────────────────────────
+  const setColor = (r: number, g: number, b: number) => doc.setTextColor(r, g, b);
+  const setSize = (s: number) => doc.setFontSize(s);
+ 
+  // ── PAGE 1 BACKGROUND ──────────────────────────────────
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, W, 297, 'F');
+ 
+  // ── HEADER STRIP ───────────────────────────────────────
+  // Header base
+  doc.setFillColor(15, 15, 15);
+  doc.rect(0, 0, W, 36, 'F');
+
+  // Brand text — simple white
+  setSize(22); setColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.text('BLACKJACK', 14, 20);
+ 
+  setSize(7); setColor(120, 120, 120);
+  doc.setFont('helvetica', 'normal');
+  doc.text('PERSONAL FINANCE TERMINAL', 14, 26);
+  doc.text(`MONTHLY REPORT  ·  ${monthLabel}`, W - 14, 26, { align: 'right' });
+ 
+  // ── SUMMARY STRIP ──────────────────────────────────────
+  doc.setFillColor(245, 245, 245);
+  doc.rect(0, 36, W, 22, 'F');
+ 
+  const cols = [
+    { label: 'TOTAL ASSETS', value: fmt(grandTotalAssets), color: [15, 15, 15] as [number, number, number] },
+    { label: 'INCOME', value: fmt(monthlyIncome), color: [46, 139, 87] as [number, number, number] },
+    { label: 'EXPENSE', value: fmt(monthlyExpense), color: [180, 60, 60] as [number, number, number] },
+    { label: 'NET', value: (monthlyIncome - monthlyExpense >= 0 ? '+' : '-') + fmt(monthlyIncome - monthlyExpense), color: monthlyIncome - monthlyExpense >= 0 ? [46, 139, 87] as [number, number, number] : [180, 60, 60] as [number, number, number] },
+  ];
+ 
+  const colW = W / 4;
+  cols.forEach((col, i) => {
+    const x = i * colW + 10;
+    setSize(6.5); setColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.text(col.label, x, 44);
+    setSize(9); doc.setTextColor(...col.color);
+    doc.setFont('helvetica', 'bold');
+    doc.text(col.value, x, 52);
+  });
+ 
+  // ── WALLET BALANCES ────────────────────────────────────
+  let y = 68;
+  setSize(7); setColor(100, 100, 100);
+  doc.setFont('helvetica', 'bold');
+  doc.text('WALLET BALANCES', 14, y);
+ 
+  autoTable(doc, {
+    startY: y + 3,
+    head: [['Account', 'Type', 'Balance']],
+    body: accounts.map(a => [
+      a.name,
+      a.type,
+      fmt(Number(a.balance || 0)),
+    ]),
+    theme: 'grid',
+    styles: {
+      fontSize: 8.5,
+      textColor: [30, 30, 30],
+      cellPadding: 3,
+      lineColor: [220, 220, 220],
+      lineWidth: 0.2,
+    },
+    headStyles: {
+      fillColor: [30, 30, 30],
+      textColor: [240, 240, 240],
+      fontSize: 7.5,
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: 60 },
+      1: { cellWidth: 40 },
+      2: { halign: 'right' },
+    },
+      margin: { left: 14, right: 14 },
+  });
+ 
+  // ── TRANSACTIONS ───────────────────────────────────────
+  y = (doc as any).lastAutoTable.finalY + 10;
+  setSize(7); setColor(100, 100, 100);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TRANSACTIONS', 14, y);
+ 
+  autoTable(doc, {
+    startY: y + 3,
+    head: [['Date', 'Notes', 'Category', 'Account', 'Amount']],
+    body: transactions.map(t => [
+      t.transaction_date.split('T')[0],
+      t.notes || '-',
+      t.category || '-',
+      t.accounts?.name || '-',
+      (Number(t.amount) >= 0 ? '+' : '-') + fmt(Number(t.amount)),
+    ]),
+    theme: 'grid',
+    styles: {
+      fontSize: 7.5,
+      textColor: [30, 30, 30],
+      cellPadding: 2.5,
+      lineColor: [220, 220, 220],
+      lineWidth: 0.2,
+      overflow: 'linebreak',
+    },
+    headStyles: {
+      fillColor: [30, 30, 30],
+      textColor: [240, 240, 240],
+      fontSize: 7,
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: 20 },
+      1: { cellWidth: 65 },
+      2: { cellWidth: 35 },
+      3: { cellWidth: 35 },
+      4: { halign: 'right', cellWidth: 27 },
+    },
+
+    margin: { left: 14, right: 14, bottom: 8 },
+    didParseCell: (data: any) => {
+      if (data.column.index === 4 && data.section === 'body') {
+        const val = String(data.cell.raw);
+        if (val.startsWith('+')) data.cell.styles.textColor = [46, 139, 87];
+        else if (val.startsWith('-')) data.cell.styles.textColor = [180, 60, 60];
+      }
+    },
+    didDrawPage: (data: any) => {
+      if (data.pageNumber > 1) {
+        doc.setFillColor(255, 255, 255);
+        doc.rect(0, 0, W, 297, 'F');
+        doc.setFillColor(20, 20, 20);
+        doc.rect(0, 0, W, 10, 'F');
+        setSize(6); setColor(160, 160, 160);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`BLACKJACK  ·  ${monthLabel}`, 14, 7);
+        doc.text(`Page ${data.pageNumber}`, W - 14, 7, { align: 'right' });
+      }
+    },
+  });
+ 
+  // ── TOP SPENDING ───────────────────────────────────────
+  if (expenseByCategory.length > 0) {
+    y = (doc as any).lastAutoTable.finalY + 4;
+ 
+    setSize(7); setColor(100, 100, 100);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOP SPENDING BY CATEGORY', 14, y);
+ 
+    autoTable(doc, {
+      startY: y + 3,
+      head: [['Category', 'Amount', '% of Expense']],
+      body: expenseByCategory.slice(0, 10).map(c => [
+        c.name,
+        fmt(c.value),
+        `${monthlyExpense > 0 ? ((c.value / monthlyExpense) * 100).toFixed(1) : 0}%`,
+      ]),
+      theme: 'grid',
+      styles: {
+        fontSize: 8.5,
+        textColor: [30, 30, 30],
+        cellPadding: 3,
+        lineColor: [220, 220, 220],
+        lineWidth: 0.2,
+      },
+      headStyles: {
+        fillColor: [30, 30, 30],
+        textColor: [240, 240, 240],
+        fontSize: 7.5,
+        fontStyle: 'bold',
+      },
+      columnStyles: {
+        1: { halign: 'right' },
+        2: { halign: 'right', cellWidth: 30 },
+      },
+     margin: { left: 14, right: 14, top: 14 },
+    });
+  }
+ 
+  // ── FOOTER LAST PAGE ───────────────────────────────────
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  doc.setPage(pageCount);
+  setSize(7); setColor(160, 160, 160);
+  doc.setFont('helvetica', 'normal');
+  doc.text(
+    `Blackjack Finance Terminal  ·  Generated ${new Date().toLocaleDateString('id-ID')}  ·  Page ${pageCount} of ${pageCount}`,
+    W / 2, 287, { align: 'center' }
+  );
+ 
+  // ── SAVE ───────────────────────────────────────────────
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  doc.save(`Blackjack_Report_${monthLabel}_${stamp}.pdf`);
+}
+
 
 const isToday = (d: Date) => { const today = new Date(); return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(); };
 const isYesterday = (d: Date) => { const y = new Date(); y.setDate(y.getDate() - 1); return d.getDate() === y.getDate() && d.getMonth() === y.getMonth() && d.getFullYear() === y.getFullYear(); };
@@ -156,6 +370,7 @@ export default function Dashboard() {
 
   const [input, setInput] = useState('');
   const [txFilter, setTxFilter] = useState<TxFilter>({ type: 'all', accountId: 'all' });
+  const [txSearch, setTxSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentYearMonth);
 
   const monthOptions = useMemo(() => buildMonthSelectOptions(36), []);
@@ -429,7 +644,13 @@ export default function Dashboard() {
   const monthlyIncome = useMemo(() => transactionsInSelectedMonth.filter(t => t.type === 'income').reduce((s, t) => s + toNumber(t.amount), 0), [transactionsInSelectedMonth]);
   const monthlyExpense = useMemo(() => transactionsInSelectedMonth.filter(t => t.type === 'expense').reduce((s, t) => s + Math.abs(toNumber(t.amount)), 0), [transactionsInSelectedMonth]);
 
-  const filteredTransactions = useMemo(() => transactionsInSelectedMonth.filter(t => (txFilter.type === 'all' || t.type === txFilter.type) && (txFilter.accountId === 'all' || t.account_id === txFilter.accountId)), [transactionsInSelectedMonth, txFilter]);
+  const filteredTransactions = useMemo(() => transactionsInSelectedMonth.filter(t => {
+    const matchFilter = (txFilter.type === 'all' || t.type === txFilter.type) && (txFilter.accountId === 'all' || t.account_id === txFilter.accountId);
+    if (!txSearch.trim()) return matchFilter;
+    const q = txSearch.toLowerCase();
+    const matchSearch = t.notes?.toLowerCase().includes(q) || t.category?.toLowerCase().includes(q) || t.accounts?.name?.toLowerCase().includes(q);
+    return matchFilter && matchSearch;
+  }), [transactionsInSelectedMonth, txFilter, txSearch]);
   const isFilterActive = txFilter.type !== 'all' || txFilter.accountId !== 'all';
 
   const groupedTransactions = useMemo(() => {
@@ -442,6 +663,21 @@ export default function Dashboard() {
     }
     return Object.entries(groups).sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime());
   }, [filteredTransactions]);
+
+  const monthlyTrendData = useMemo(() => {
+    const results = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' });
+      const monthTxs = transactions.filter(t => transactionInYearMonth(t, ym));
+      const income = monthTxs.filter(t => t.type === 'income').reduce((s, t) => s + toNumber(t.amount), 0);
+      const expense = monthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + Math.abs(toNumber(t.amount)), 0);
+      results.push({ label, income, expense, net: income - expense });
+    }
+    return results;
+  }, [transactions]);
 
   const expenseByCategory = useMemo(() => {
     const expenses = transactionsInSelectedMonth.filter(t => t.type === 'expense');
@@ -477,10 +713,10 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen flex justify-center" style={{ background: '#0A0A0A' }}>
-      <div className="w-full max-w-md min-h-screen relative flex flex-col overflow-x-hidden" style={{ background: '#0A0A0A', borderLeft: '1px solid rgba(255,255,255,0.04)', borderRight: '1px solid rgba(255,255,255,0.04)' }}>
+      <div className="w-full max-w-md min-h-screen relative flex flex-col overflow-x-hidden" style={{ background: '#0A0A0A', borderLeft: '1px solid transparent', borderRight: '1px solid transparent' }}>
         
         {/* HEADER — Luxury Noir */}
-        <header className="sticky top-0 z-30 flex flex-col" style={{ background: '#0A0A0A', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <header className="sticky top-0 z-30 flex flex-col" style={{ background: '#0A0A0A', borderBottom: '1px solid transparent' }}>
 
           {/* Top bar — brand + actions */}
           <div className="px-5 pt-5 pb-4 flex items-center justify-between">
@@ -530,7 +766,7 @@ export default function Dashboard() {
                   transition: 'background 200ms ease-out',
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#6DB8F0'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#C6C6C6'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#4DA3E8'; }}
               >
                 + Entry
               </button>
@@ -540,35 +776,35 @@ export default function Dashboard() {
           {/* Data strip — key metrics in one line */}
           <div
             className="px-5 py-2 flex items-center gap-5 overflow-x-auto scrollbar-hide"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+            style={{ borderTop: '1px solid transparent' }}
           >
             <div className="flex flex-col shrink-0">
               <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>Assets</span>
               <span style={{ fontSize: '12px', fontWeight: 500, color: '#EFEFEF', fontFamily: "'SF Mono', monospace", letterSpacing: '0.01em' }}>{formatCurrency(grandTotalAssets)}</span>
             </div>
-            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: '24px', background: 'transparent', flexShrink: 0 }} />
             <div className="flex flex-col shrink-0">
               <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>Invest</span>
               <span style={{ fontSize: '12px', fontWeight: 500, color: '#4DA3E8', fontFamily: "'SF Mono', monospace", letterSpacing: '0.01em' }}>{formatCurrency(totalInvestments)}</span>
             </div>
-            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: '24px', background: 'transparent', flexShrink: 0 }} />
             <div className="flex flex-col shrink-0">
               <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>In</span>
               <span style={{ fontSize: '12px', fontWeight: 500, color: '#4CAF85', fontFamily: "'SF Mono', monospace", letterSpacing: '0.01em' }}>+{formatCurrency(monthlyIncome)}</span>
             </div>
-            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: '24px', background: 'transparent', flexShrink: 0 }} />
             <div className="flex flex-col shrink-0">
               <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>Out</span>
               <span style={{ fontSize: '12px', fontWeight: 500, color: '#E05C5C', fontFamily: "'SF Mono', monospace", letterSpacing: '0.01em' }}>-{formatCurrency(monthlyExpense)}</span>
             </div>
-            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: '24px', background: 'transparent', flexShrink: 0 }} />
             <div className="flex flex-col shrink-0 ml-auto">
               <span style={{ fontSize: '8px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4A4A4A', fontFamily: 'Inter, sans-serif' }}>Period</span>
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="h-auto border-0 shadow-none bg-transparent p-0 focus:ring-0 focus:ring-offset-0" style={{ fontSize: '12px', fontWeight: 500, color: '#8A8A8A', fontFamily: "'SF Mono', monospace" }}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 0 }}>
+                <SelectContent style={{ background: '#111111', border: 'none', borderRadius: 0 }}>
                   {monthOptions.map(o => <SelectItem key={o.value} value={o.value} style={{ fontSize: '11px' }}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -579,7 +815,7 @@ export default function Dashboard() {
         <div className="flex-1 overflow-y-auto px-5 py-6 pb-32 space-y-10">
           
           {/* PAGE HEADER + TABS */}
-          <div className="bj-deal bj-deal-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '16px' }}>
+          <div className="bj-deal bj-deal-1" style={{ borderBottom: '1px solid transparent', paddingBottom: '16px' }}>
             <h2 style={{
               fontFamily: "'Cormorant Garamond', Georgia, serif",
               fontSize: '42px',
@@ -630,8 +866,33 @@ export default function Dashboard() {
           {activeTab === 'Overview' && (
             <div className="bj-deal space-y-5">
 
+              {/* EXPORT PDF BUTTON */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                <button
+                  onClick={() => downloadMonthlyPDF(
+                    transactionsInSelectedMonth,
+                    accounts,
+                    budgets,
+                    goals,
+                    selectedMonth,
+                    monthlyIncome,
+                    monthlyExpense,
+                    grandTotalAssets,
+                    expenseByCategory
+                  )}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer', transition: 'all 200ms' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#4DA3E8'; (e.currentTarget as HTMLElement).style.color = '#4DA3E8'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.10)'; (e.currentTarget as HTMLElement).style.color = '#A0A0A0'; }}
+                >
+                  <Download className="w-3 h-3" />
+                  Export PDF
+                </button>
+              </div>
+
               {/* NET WORTH — Hero */}
-              <div className="bj-deal-1" style={{ padding: '20px', background: '#141414', border: '1px solid rgba(255,255,255,0.08)' }}>
+
+              {/* NET WORTH — Hero */}
+              <div className="bj-deal-1 bj-panel" style={{ padding: '20px 0', background: 'linear-gradient(145deg, transparent 0%, rgba(255,255,255,0.01) 100%)', border: 'none', backdropFilter: 'blur(8px)' }}>
                 <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '8px' }}>Total Net Worth</p>
                 <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '52px', fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1, color: '#F5F5F5' }}>
                   {formatCurrency(grandTotalAssets)}
@@ -658,7 +919,7 @@ export default function Dashboard() {
               </div>
 
               {/* MONTHLY CASHFLOW */}
-              <div className="bj-deal-2" style={{ padding: '20px', background: '#141414', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="bj-deal-2 bj-panel" style={{ padding: '20px 0', background: 'linear-gradient(145deg, transparent 0%, rgba(255,255,255,0.01) 100%)', border: 'none', backdropFilter: 'blur(8px)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif' }}>Monthly Cashflow</p>
                   <p style={{ fontSize: '9px', color: '#606060', fontFamily: "'SF Mono', monospace" }}>{selectedMonth}</p>
@@ -703,7 +964,7 @@ export default function Dashboard() {
               </div>
 
               {/* WALLET BREAKDOWN */}
-              <div className="bj-deal-3">
+              <div className="bj-deal-3 bj-panel">
                 <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '14px' }}>Wallet Breakdown</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {accounts.map(acc => {
@@ -730,7 +991,7 @@ export default function Dashboard() {
 
               {/* TOP SPENDING */}
               {expenseByCategory.length > 0 && (
-                <div className="bj-deal-4">
+                <div className="bj-deal-4 bj-panel">
                   <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '14px' }}>Top Spending</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {expenseByCategory.slice(0, 5).map((cat, i) => {
@@ -759,7 +1020,7 @@ export default function Dashboard() {
 
               {/* BUDGET HEALTH */}
               {budgets.length > 0 && (
-                <div className="bj-deal-5" style={{ padding: '20px', background: '#141414', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="bj-deal-5 bj-panel" style={{ padding: '20px 0', background: 'transparent', border: 'none' }}>
                   <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '14px' }}>Budget Health</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {budgets.map(budget => {
@@ -779,6 +1040,73 @@ export default function Dashboard() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* MONTHLY TREND CHART */}
+              {monthlyTrendData.some(d => d.income > 0 || d.expense > 0) && (
+                <div className="bj-deal-5">
+                  <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '16px' }}>
+                    6-Month Trend
+                  </p>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <LineChart data={monthlyTrendData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 9, fill: '#606060', fontFamily: 'Inter, sans-serif' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 9, fill: '#606060', fontFamily: 'Inter, sans-serif' }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={v => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)}
+                      />
+                      <RechartsTooltip
+                        contentStyle={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 0, fontSize: '11px', fontFamily: 'Inter, sans-serif' }}
+                        labelStyle={{ color: '#606060', marginBottom: '4px' }}
+                        itemStyle={{ color: '#F5F5F5' }}
+                        formatter={(value: number) => new Intl.NumberFormat('id-ID').format(value)}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="income"
+                        stroke="#4CAF85"
+                        strokeWidth={1.5}
+                        dot={{ r: 3, fill: '#4CAF85', strokeWidth: 0 }}
+                        activeDot={{ r: 4, fill: '#4CAF85' }}
+                        name="Income"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="expense"
+                        stroke="#E05C5C"
+                        strokeWidth={1.5}
+                        dot={{ r: 3, fill: '#E05C5C', strokeWidth: 0 }}
+                        activeDot={{ r: 4, fill: '#E05C5C' }}
+                        name="Expense"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="net"
+                        stroke="#4DA3E8"
+                        strokeWidth={1}
+                        strokeDasharray="4 2"
+                        dot={false}
+                        name="Net"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '8px' }}>
+                    {[{ color: '#4CAF85', label: 'Income' }, { color: '#E05C5C', label: 'Expense' }, { color: '#4DA3E8', label: 'Net', dashed: true }].map(item => (
+                      <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <div style={{ width: 16, height: 1.5, background: item.color, opacity: item.dashed ? 0.7 : 1 }} />
+                        <span style={{ fontSize: '9px', color: '#606060', fontFamily: 'Inter, sans-serif', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{item.label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -802,7 +1130,7 @@ export default function Dashboard() {
                     className={`bj-deal-${Math.min(i + 1, 5)}`}
                     style={{
                       padding: '16px',
-                      background: isSelected ? '#1C1C1C' : '#141414',
+                      background: isSelected ? 'transparent' : 'transparent',
                       border: `1px solid ${isSelected ? '#4DA3E8' : 'rgba(255,255,255,0.08)'}`,
                       cursor: 'pointer',
                       transition: 'all 200ms ease-out',
@@ -845,7 +1173,7 @@ export default function Dashboard() {
                   const isOver = spent > budget.amount;
                   const isWarn = !isOver && percentage > 80;
                   return (
-                    <div key={budget.id} className={`bj-deal-${Math.min(i + 1, 5)} group`} style={{ paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'relative' }}>
+                    <div key={budget.id} className={`bj-deal-${Math.min(i + 1, 5)} group`} style={{ paddingBottom: '16px', borderBottom: '1px solid transparent', position: 'relative' }}>
                       <button
                         onClick={() => confirmDelete('budget', budget.id)}
                         style={{ position: 'absolute', top: 0, right: 0, color: '#606060', background: 'none', border: 'none', cursor: 'pointer', opacity: 0, transition: 'all 200ms', padding: '2px' }}
@@ -885,7 +1213,7 @@ export default function Dashboard() {
                   const percentage = Math.min((toNumber(goal.current_amount) / toNumber(goal.target_amount)) * 100, 100);
                   const isDone = percentage >= 100;
                   return (
-                    <div key={goal.id} className={`bj-deal-${Math.min(i + 1, 5)}`} style={{ padding: '16px', background: '#141414', border: `1px solid ${isDone ? 'rgba(76,175,133,0.3)' : 'rgba(255,255,255,0.08)'}` }}>
+                    <div key={goal.id} className={`bj-deal-${Math.min(i + 1, 5)}`} style={{ padding: '16px', background: 'transparent', border: `1px solid ${isDone ? 'rgba(76,175,133,0.3)' : 'rgba(255,255,255,0.08)'}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <p style={{ fontSize: '16px', fontWeight: 400, color: '#F5F5F5', fontFamily: "'Cormorant Garamond', Georgia, serif", textTransform: 'capitalize', flex: 1, paddingRight: '12px' }}>{goal.name}</p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
@@ -989,10 +1317,42 @@ export default function Dashboard() {
                 )}
               </div>
 
+              {/* SEARCH BAR */}
+              <div style={{ position: 'relative', marginBottom: '4px' }}>
+                <input
+                  type="text"
+                  placeholder="Search notes, category, account..."
+                  value={txSearch}
+                  onChange={e => setTxSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: '1px solid rgba(255,255,255,0.10)',
+                    color: '#F5F5F5',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: '12px',
+                    padding: '8px 28px 8px 0',
+                    outline: 'none',
+                    transition: 'border-color 200ms ease-out',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderBottomColor = '#4DA3E8'; }}
+                  onBlur={e => { e.currentTarget.style.borderBottomColor = 'rgba(255,255,255,0.10)'; }}
+                />
+                {txSearch && (
+                  <button
+                    onClick={() => setTxSearch('')}
+                    style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#606060', cursor: 'pointer', fontSize: '12px', padding: '4px' }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 {groupedTransactions.map(([dateKey, txs]) => (
                   <div key={dateKey}>
-                    <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
+                    <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', paddingBottom: '8px', borderBottom: '1px solid transparent', marginBottom: '8px' }}>
                       {formatDateForGrouping(dateKey)}
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -1054,9 +1414,9 @@ export default function Dashboard() {
         <div className="fixed bottom-6 right-6 sm:right-auto sm:translate-x-44 z-40">
           <button
             onClick={() => setShowAIAssistant(true)}
-            style={{ width: 52, height: 52, background: '#141414', border: '1px solid rgba(255,255,255,0.12)', color: '#4DA3E8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', transition: 'all 200ms ease-out' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#4DA3E8'; (e.currentTarget as HTMLElement).style.background = '#1C1C1C'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLElement).style.background = '#141414'; }}
+            style={{ width: 52, height: 52, background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#4DA3E8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', transition: 'all 200ms ease-out' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#4DA3E8'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
             <MessageSquare className="w-5 h-5" />
           </button>
@@ -1065,7 +1425,7 @@ export default function Dashboard() {
         {/* AI CHAT MODAL */}
         {showAIAssistant && (
           <div className="fixed inset-0 z-50 flex flex-col justify-end" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
-            <div className="w-full max-w-md mx-auto flex flex-col shadow-2xl" style={{ height: '88dvh', background: '#0A0A0A', borderTop: '1px solid rgba(255,255,255,0.10)', borderLeft: '1px solid rgba(255,255,255,0.06)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="w-full max-w-md mx-auto flex flex-col shadow-2xl" style={{ height: '88dvh', background: '#0A0A0A', borderTop: '1px solid rgba(255,255,255,0.10)', borderLeft: '1px solid transparent', borderRight: '1px solid transparent' }}>
 
               {/* Chat Header */}
               <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: '#111111' }}>
@@ -1099,7 +1459,7 @@ export default function Dashboard() {
               </div>
 
               {/* Messages */}
-              <div className="scrollbar-hide" style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="scrollbar-hide" style={{ flex: 1, overflowY: 'auto', padding: '20px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {chatMessages.length === 0 && (
                   <div style={{ textAlign: 'center', paddingTop: '40px' }}>
                     <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '28px', fontWeight: 300, color: '#2A2A2A', marginBottom: '8px' }}>How can I help?</p>
@@ -1119,7 +1479,7 @@ export default function Dashboard() {
                       <div style={{
                         maxWidth: '85%',
                         padding: '10px 14px',
-                        background: isUser ? '#4DA3E8' : '#141414',
+                        background: isUser ? '#4DA3E8' : 'transparent',
                         border: isUser ? 'none' : '1px solid rgba(255,255,255,0.07)',
                         color: isUser ? '#fff' : '#E0E0E0',
                         fontSize: isUser ? '13px' : '13px',
@@ -1141,7 +1501,7 @@ export default function Dashboard() {
                 })}
                 {chatStatus === 'submitted' && (
                   <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                    <div style={{ padding: '12px 16px', background: '#141414', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <div style={{ padding: '12px 16px', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '5px' }}>
                       {[0, 1, 2].map(i => (
                         <div key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#4A4A4A', animation: 'bj-pulse-slow 1.2s ease-in-out infinite', animationDelay: `${i * 0.2}s` }} />
                       ))}
@@ -1164,14 +1524,14 @@ export default function Dashboard() {
                   disabled={chatBusy}
                   placeholder="Ask anything or log a transaction..."
                   rows={1}
-                  style={{ flex: 1, background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '14px', padding: '10px 12px', outline: 'none', resize: 'none', lineHeight: 1.5, borderRadius: 0 }}
+                  style={{ flex: 1, background: 'transparent', border: 'none', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '14px', padding: '10px 12px', outline: 'none', resize: 'none', lineHeight: 1.5, borderRadius: 0 }}
                   onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
                   onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }}
                 />
                 <button
                   type="submit"
                   disabled={chatBusy || !input.trim()}
-                  style={{ padding: '10px 18px', background: input.trim() && !chatBusy ? '#4DA3E8' : '#1C1C1C', border: 'none', color: input.trim() && !chatBusy ? '#fff' : '#3A3A3A', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: input.trim() && !chatBusy ? 'pointer' : 'not-allowed', transition: 'all 200ms', flexShrink: 0 }}
+                  style={{ padding: '10px 18px', background: input.trim() && !chatBusy ? '#4DA3E8' : 'transparent', border: 'none', color: input.trim() && !chatBusy ? '#fff' : '#3A3A3A', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: input.trim() && !chatBusy ? 'pointer' : 'not-allowed', transition: 'all 200ms', flexShrink: 0 }}
                 >
                   Send
                 </button>
@@ -1182,7 +1542,7 @@ export default function Dashboard() {
 
         {/* EDIT BALANCE / FUND GOAL */}
         <Dialog open={editBalanceOpen || fundGoalOpen} onOpenChange={(isOpen) => { setEditBalanceOpen(isOpen); setFundGoalOpen(isOpen); }}>
-          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: 'none' }}>
             <div style={{ padding: '24px' }}>
               <p style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', marginBottom: '4px' }}>
                 {editBalanceOpen ? selectedAccount?.name : selectedGoal?.name}
@@ -1198,13 +1558,13 @@ export default function Dashboard() {
                 value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
                 className="no-spinner"
-                style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '28px', fontWeight: 300, padding: '10px 12px', outline: 'none', marginBottom: '20px', borderRadius: 0 }}
+                style={{ width: '100%', background: 'transparent', border: 'none', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '28px', fontWeight: 300, padding: '10px 12px', outline: 'none', marginBottom: '20px', borderRadius: 0 }}
                 onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
                 onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }}
               />
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => { setEditBalanceOpen(false); setFundGoalOpen(false); }}
-                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
                   Cancel
                 </button>
                 <button onClick={editBalanceOpen ? handleUpdateBalance : handleFundGoal}
@@ -1218,7 +1578,7 @@ export default function Dashboard() {
 
         {/* ASSET DIALOG */}
         <Dialog open={assetDialogOpen || editAssetOpen} onOpenChange={(isOpen) => { setAssetDialogOpen(isOpen); setEditAssetOpen(isOpen); }}>
-          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: 'none' }}>
             <div style={{ padding: '24px' }}>
               <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5', marginBottom: '20px' }}>
                 {editAssetOpen ? 'Edit Asset' : 'Track Asset'}
@@ -1228,7 +1588,7 @@ export default function Dashboard() {
                 <div>
                   <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Ticker Symbol</label>
                   <input value={assetSymbol} onChange={e => setAssetSymbol(e.target.value)} placeholder="e.g. BBCA.JK, BTC-USD, GC=F"
-                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'SF Mono', monospace", fontSize: '14px', padding: '10px 12px', outline: 'none', borderRadius: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', color: '#F5F5F5', fontFamily: "'SF Mono', monospace", fontSize: '14px', padding: '10px 12px', outline: 'none', borderRadius: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
                     onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
                   <p style={{ fontSize: '9px', color: '#606060', fontFamily: 'Inter, sans-serif', marginTop: '4px' }}>Source: Yahoo Finance · Auto-converted to IDR</p>
@@ -1236,14 +1596,14 @@ export default function Dashboard() {
                 <div>
                   <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Units Owned</label>
                   <input type="number" value={assetUnits} onChange={e => setAssetUnits(e.target.value)} placeholder="e.g. 100 or 0.5" className="no-spinner"
-                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '24px', fontWeight: 300, padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '24px', fontWeight: 300, padding: '10px 12px', outline: 'none', borderRadius: 0 }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
                     onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => { setAssetDialogOpen(false); setEditAssetOpen(false); }}
-                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
                   Cancel
                 </button>
                 <button onClick={editAssetOpen ? handleEditAsset : handleAddAsset}
@@ -1257,7 +1617,7 @@ export default function Dashboard() {
 
         {/* DELETE CONFIRM */}
         <Dialog open={deleteConfirm.isOpen} onOpenChange={(isOpen) => setDeleteConfirm(prev => ({ ...prev, isOpen }))}>
-          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: 'none' }}>
             <div style={{ padding: '24px' }}>
               <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5', marginBottom: '8px' }}>Confirm Delete</p>
               <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '16px' }} />
@@ -1266,7 +1626,7 @@ export default function Dashboard() {
               </p>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => setDeleteConfirm({ isOpen: false, type: null, id: null })}
-                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
                   Cancel
                 </button>
                 <button onClick={executeDelete} disabled={isDeleting}
@@ -1281,7 +1641,7 @@ export default function Dashboard() {
 
         {/* ADD BUDGET */}
         <Dialog open={budgetDialogOpen} onOpenChange={setBudgetDialogOpen}>
-          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: 'none' }}>
             <div style={{ padding: '24px' }}>
               <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5', marginBottom: '20px' }}>New Spending Limit</p>
               <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '20px' }} />
@@ -1289,21 +1649,21 @@ export default function Dashboard() {
                 <div>
                   <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Category</label>
                   <input value={newBudgetCategory} onChange={e => setNewBudgetCategory(e.target.value)} placeholder="e.g. Food, Transport"
-                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: 'Inter, sans-serif', fontSize: '13px', padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', color: '#F5F5F5', fontFamily: 'Inter, sans-serif', fontSize: '13px', padding: '10px 12px', outline: 'none', borderRadius: 0 }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
                     onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
                 </div>
                 <div>
                   <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Limit Amount (IDR)</label>
                   <input type="number" value={newBudgetAmount} onChange={e => setNewBudgetAmount(e.target.value)} placeholder="0" className="no-spinner"
-                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '24px', fontWeight: 300, padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '24px', fontWeight: 300, padding: '10px 12px', outline: 'none', borderRadius: 0 }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
                     onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => setBudgetDialogOpen(false)}
-                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
                   Cancel
                 </button>
                 <button onClick={handleAddBudget}
@@ -1317,7 +1677,7 @@ export default function Dashboard() {
 
         {/* ADD GOAL */}
         <Dialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen}>
-          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+          <DialogContent className="sm:max-w-[320px] p-0 rounded-none border-0" style={{ background: '#111111', border: 'none' }}>
             <div style={{ padding: '24px' }}>
               <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: '22px', fontWeight: 400, color: '#F5F5F5', marginBottom: '20px' }}>New Target</p>
               <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', marginBottom: '20px' }} />
@@ -1325,21 +1685,21 @@ export default function Dashboard() {
                 <div>
                   <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Target Name</label>
                   <input value={newGoalName} onChange={e => setNewGoalName(e.target.value)} placeholder="e.g. Emergency Fund"
-                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: 'Inter, sans-serif', fontSize: '13px', padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', color: '#F5F5F5', fontFamily: 'Inter, sans-serif', fontSize: '13px', padding: '10px 12px', outline: 'none', borderRadius: 0 }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
                     onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
                 </div>
                 <div>
                   <label style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#606060', fontFamily: 'Inter, sans-serif', display: 'block', marginBottom: '6px' }}>Target Amount (IDR)</label>
                   <input type="number" value={newGoalTarget} onChange={e => setNewGoalTarget(e.target.value)} placeholder="0" className="no-spinner"
-                    style={{ width: '100%', background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.10)', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '24px', fontWeight: 300, padding: '10px 12px', outline: 'none', borderRadius: 0 }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', color: '#F5F5F5', fontFamily: "'Cormorant Garamond', serif", fontSize: '24px', fontWeight: 300, padding: '10px 12px', outline: 'none', borderRadius: 0 }}
                     onFocus={e => { e.currentTarget.style.borderColor = '#4DA3E8'; }}
                     onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => setGoalDialogOpen(false)}
-                  style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
+                  style={{ flex: 1, padding: '10px', background: 'transparent', border: 'none', color: '#A0A0A0', fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif', cursor: 'pointer' }}>
                   Cancel
                 </button>
                 <button onClick={handleAddGoal}

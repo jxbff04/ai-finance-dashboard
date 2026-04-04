@@ -33,7 +33,7 @@ interface TransactionDialogProps {
 
 const inputStyle = {
   width: '100%',
-  background: '#1C1C1C',
+  background: '#0A0A0A',
   border: '1px solid rgba(255,255,255,0.10)',
   color: '#F5F5F5',
   fontFamily: 'Inter, sans-serif',
@@ -57,7 +57,7 @@ const labelStyle = {
 
 const selectStyle = {
   width: '100%',
-  background: '#1C1C1C',
+  background: '#0A0A0A',
   border: '1px solid rgba(255,255,255,0.10)',
   color: '#F5F5F5',
   fontFamily: 'Inter, sans-serif',
@@ -92,6 +92,84 @@ async function runSmartLink({ notes, category_name, amount, type, month }: { not
       if (matched) toast.info(`📊 Linked to "${matched.category_name}"`, { duration: 4000 });
     }
   } catch (e: any) { console.error('[smart-link]', e.message); }
+}
+
+// ─── BUDGET OVERRUN CHECK ─────────────────────────────────────────────────
+async function checkBudgetOverrun({
+  category_name,
+  amount,
+  month,
+}: {
+  category_name: string;
+  amount: number;
+  month: string;
+}) {
+  try {
+    if (!category_name || category_name === 'General') return;
+
+    // Ambil budget untuk kategori ini
+    const { data: budgets } = await supabase
+      .from('budgets')
+      .select('id, category_name, amount')
+      .eq('month', month)
+      .ilike('category_name', category_name);
+
+    if (!budgets || budgets.length === 0) return;
+
+    const budget = budgets[0];
+
+    // Hitung total expense kategori ini bulan ini
+    const { data: txs } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('type', 'expense')
+      .gte('transaction_date', `${month}-01`)
+      .lte('transaction_date', `${month}-31`);
+
+    if (!txs) return;
+
+    // Filter by category — ambil dari categories table
+    const { data: cats } = await supabase
+      .from('categories')
+      .select('id')
+      .ilike('name', category_name);
+
+    if (!cats || cats.length === 0) return;
+
+    const catId = cats[0].id;
+
+    const { data: catTxs } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('type', 'expense')
+      .eq('category_id', catId)
+      .gte('transaction_date', `${month}-01`)
+      .lte('transaction_date', `${month}-31`);
+
+    if (!catTxs) return;
+
+    const totalSpent = catTxs.reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
+    const budgetLimit = Number(budget.amount);
+    const fmt = (n: number) => new Intl.NumberFormat('id-ID').format(n);
+
+    if (totalSpent > budgetLimit) {
+      // Sudah over budget
+      const overBy = totalSpent - budgetLimit;
+      toast.warning(
+        `⚠️ Budget "${budget.category_name}" terlampaui ${fmt(overBy)} dari limit ${fmt(budgetLimit)}`,
+        { duration: 6000 }
+      );
+    } else if (totalSpent / budgetLimit >= 0.8) {
+      // Mendekati 80%
+      const remaining = budgetLimit - totalSpent;
+      toast.warning(
+        `📊 Budget "${budget.category_name}" tersisa ${fmt(remaining)} (${((totalSpent / budgetLimit) * 100).toFixed(0)}% terpakai)`,
+        { duration: 5000 }
+      );
+    }
+  } catch (e: any) {
+    console.error('[budget-check] silent fail:', e.message);
+  }
 }
 
 export default function TransactionDialog({ open, onOpenChange, initialType, accounts, onSubmitted, editTransaction, mode, sessionId }: TransactionDialogProps) {
@@ -218,6 +296,9 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
         if (acc) await supabase.from('accounts').update({ balance: Number(acc.balance || 0) + finalAmount }).eq('id', accountId);
         toast.success('Logged.'); onSubmitted(); onOpenChange(false);
         runSmartLink({ notes, category_name: categoryName, amount: absAmount, type, month });
+        if (type === 'expense' && categoryName) {
+          checkBudgetOverrun({ category_name: categoryName, amount: absAmount, month });
+        }
       }
     } catch (err: any) { toast.error(err.message || 'Failed.'); }
     finally { setIsSubmitting(false); }
@@ -230,7 +311,7 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px] p-0 rounded-none border-0 shadow-2xl" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.10)' }}>
+      <DialogContent className="sm:max-w-[400px] p-0 rounded-none border-0 shadow-2xl [&>button]:hidden" style={{ background: '#0A0A0A', border: 'none' }}>
 
         {/* Header */}
         <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -251,7 +332,7 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
 
           {/* AI FILL */}
           {!isEditMode && !isGuest && (
-            <div style={{ background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.07)', padding: '12px' }}>
+            <div style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.07)', padding: '12px' }}>
               <textarea placeholder="e.g. Makan siang 45k pakai Gopay..." value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} rows={2}
                 style={{ width: '100%', background: 'transparent', border: 'none', color: '#A0A0A0', fontFamily: "'Cormorant Garamond', serif", fontSize: '14px', resize: 'none', outline: 'none', lineHeight: 1.5 }} />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
@@ -302,7 +383,7 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
                   </span>
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 rounded-none" style={{ background: '#1C1C1C', border: '1px solid rgba(255,255,255,0.12)' }}>
+              <PopoverContent className="w-auto p-0 rounded-none" style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.12)' }}>
                 <Calendar mode="single" selected={date} onSelect={d => { setDate(d); setDateOpen(false); }} locale={idLocale} initialFocus />
               </PopoverContent>
             </Popover>
@@ -331,7 +412,7 @@ export default function TransactionDialog({ open, onOpenChange, initialType, acc
                 const fmt = (n: number) => new Intl.NumberFormat('id-ID').format(n);
                 const srcAfter = Number(src.balance || 0) - amt;
                 return (
-                  <div style={{ marginTop: '8px', padding: '8px 12px', background: '#1C1C1C', border: '1px solid rgba(77,163,232,0.2)', fontSize: '10px', color: '#606060', fontFamily: "'SF Mono', monospace" }}>
+                  <div style={{ marginTop: '8px', padding: '8px 12px', background: '#0A0A0A', border: '1px solid rgba(77,163,232,0.2)', fontSize: '10px', color: '#606060', fontFamily: "'SF Mono', monospace" }}>
                     {src.name} <span style={{ color: srcAfter < 0 ? '#E05C5C' : '#4CAF85' }}>{fmt(srcAfter)}</span>
                     {'  →  '}
                     {dst.name} <span style={{ color: '#4CAF85' }}>{fmt(Number(dst.balance || 0) + amt)}</span>

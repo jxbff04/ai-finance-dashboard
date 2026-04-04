@@ -71,25 +71,21 @@ export function ModeProvider({ children }: { children: ReactNode }) {
     setMode('guest');
   };
 
-  const getStoredPin = (): string => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('bj_pin') || '141201';
-    }
-    return '141201';
-  };
+  const PIN = '141201'; // ganti dengan PIN kamu
 
   const enterPrivate = (pin: string): boolean => {
-    const correctPin = getStoredPin();
-    if (pin.trim() === correctPin) {
-      setMode('private');
-      return true;
-    }
+    const stored = typeof window !== 'undefined' 
+      ? (localStorage.getItem('bj_pin') || PIN) 
+      : PIN;
+    if (pin.trim() === stored) { setMode('private'); return true; }
     return false;
   };
 
   const changePin = (oldPin: string, newPin: string): boolean => {
-    const correctPin = getStoredPin();
-    if (oldPin.trim() !== correctPin) return false;
+    const stored = typeof window !== 'undefined'
+      ? (localStorage.getItem('bj_pin') || PIN)
+      : PIN;
+    if (oldPin.trim() !== stored) return false;
     localStorage.setItem('bj_pin', newPin.trim());
     return true;
   };
